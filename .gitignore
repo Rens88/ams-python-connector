@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+
+# Smartabase outputs and sensitive/local data
+fetched_data/
+smartabase_runs/
+generated_data/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
