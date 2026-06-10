@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from pathlib import Path
 from typing import Mapping, MutableMapping
 from urllib.parse import urlparse, urlunparse
 
@@ -73,13 +74,37 @@ class SmartabaseCredentials:
 
 
 def load_credentials(env: Mapping[str, str] | None = None) -> SmartabaseCredentials:
-    """Load preferred Smartabase variables with legacy aliases as fallbacks."""
+    """Load credentials from the environment, falling back to a local .env file."""
 
     source = os.environ if env is None else env
+    dotenv_values = load_dotenv()
     url = _first_present(source, "SMARTABASE_URL", "SB_URL")
+    if not url:
+        url = _first_present(dotenv_values, "SMARTABASE_URL", "SB_URL")
     username = _first_present(source, "SMARTABASE_USERNAME", "SB_USER")
+    if not username:
+        username = _first_present(dotenv_values, "SMARTABASE_USERNAME", "SB_USER")
     password = _first_present(source, "SMARTABASE_PASSWORD", "SB_PASS")
+    if not password:
+        password = _first_present(dotenv_values, "SMARTABASE_PASSWORD", "SB_PASS")
     return SmartabaseCredentials(url=url, username=username, password=password)
+
+
+def load_dotenv(path: str | os.PathLike[str] = ".env") -> dict[str, str]:
+    """Parse a simple KEY=VALUE .env file if present."""
+
+    dotenv_path = Path(path)
+    if not dotenv_path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = _strip_quotes(value.strip())
+    return values
 
 
 def redact_secrets(value):
@@ -95,4 +120,10 @@ def redact_secrets(value):
         return dict(redacted)
     if isinstance(value, list):
         return [redact_secrets(item) for item in value]
+    return value
+
+
+def _strip_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
     return value

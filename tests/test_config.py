@@ -1,10 +1,18 @@
+import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from ams_smartabase.config import SmartabaseCredentials, load_credentials, normalize_url, redact_secrets
+from ams_smartabase.config import (
+    SmartabaseCredentials,
+    load_credentials,
+    load_dotenv,
+    normalize_url,
+    redact_secrets,
+)
 
 
 class ConfigTests(unittest.TestCase):
@@ -19,6 +27,37 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(credentials.url, "https://example.com")
         self.assertEqual(credentials.username, "user")
         self.assertEqual(credentials.password, "secret")
+
+    def test_load_dotenv_parses_simple_key_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / ".env"
+            env_path.write_text(
+                'SMARTABASE_URL=example.com\nSMARTABASE_USERNAME="user"\nSMARTABASE_PASSWORD=\'secret\'\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                load_dotenv(env_path),
+                {
+                    "SMARTABASE_URL": "example.com",
+                    "SMARTABASE_USERNAME": "user",
+                    "SMARTABASE_PASSWORD": "secret",
+                },
+            )
+
+    def test_load_credentials_falls_back_to_local_dotenv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / ".env"
+            env_path.write_text(
+                "SMARTABASE_URL=example.com\nSMARTABASE_USERNAME=user\nSMARTABASE_PASSWORD=secret\n",
+                encoding="utf-8",
+            )
+            old_cwd = Path.cwd()
+            try:
+                os.chdir(tmp)
+                credentials = load_credentials({})
+            finally:
+                os.chdir(old_cwd)
+            self.assertEqual(credentials, SmartabaseCredentials("example.com", "user", "secret"))
 
     def test_redacts_passwords(self):
         credentials = SmartabaseCredentials("example.com", "user", "secret")

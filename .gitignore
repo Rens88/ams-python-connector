@@ -4,7 +4,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+# Local credentials
 .env
+.env.local
 
 # Smartabase outputs and sensitive/local data
 fetched_data/
@@ -15,3 +17,4 @@ generated_data/
 build/
 dist/
 *.egg-info/
+use_case_examples/

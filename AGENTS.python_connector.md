@@ -1,6 +1,6 @@
 # Agent Guidance - Python Smartabase Client
 
-Last updated: 2026-05-07
+Last updated: 2026-06-10
 
 ## Project Aim
 
@@ -21,7 +21,7 @@ HTTP requests directly from Python.
 ## Sources Inspected
 
 The current guidance is based on Teamworks public `smartabaseR` documentation and
-the public GitHub source inspected on 2026-05-07:
+the public GitHub source inspected on 2026-06-10:
 
 - https://teamworksapp.github.io/smartabaseR/
 - https://teamworksapp.github.io/smartabaseR/reference/index.html
@@ -54,6 +54,12 @@ the public GitHub source inspected on 2026-05-07:
 
 When changing API behavior, re-check the Teamworks docs and source first. This
 API can change independently of this repository.
+
+## Task Handoff
+
+When looking for the next implementation tasks, read `agent-docs/open-work.md`
+first. Treat that file as the current work queue and project-direction note for
+this repository.
 
 ## Python-Only Boundary
 
@@ -121,13 +127,19 @@ Normalize Smartabase URLs to `https://...`.
 Authentication and endpoint discovery:
 
 - `POST /api/v2/user/loginUser`
-- Body includes `username`, `password`, and `loginProperties` with an app/site
-  name and client timestamp.
+- Body includes `username`, `password`, and `loginProperties` with the
+  Smartabase site/app name and a `clientTime` string in `YYYY-MM-DDTHH:MM`
+  format.
 - Use HTTP Basic Auth with Smartabase username and password.
 - Use a Python user agent such as `ams-python-smartabase-client`.
-- Preserve session headers/cookies from login when needed.
+- Set `X-GWT-Permutation: HostedMode` on login and endpoint-discovery requests.
+- Preserve `session-header` and login cookies from login when needed.
 - Optionally call `GET /api/v3/endpoints?version=v1` after login to discover
   endpoint aliases instead of assuming endpoint names forever.
+- Endpoint discovery requests should reuse HTTP Basic Auth plus the login
+  `session-header` and `JSESSIONID` cookie. If discovery is unavailable for a
+  tenant or account, fall back to the known default endpoint names and warn
+  rather than breaking all read operations.
 
 Most v1 data operations use:
 
@@ -533,9 +545,21 @@ Unit tests should cover:
 - Safe output folder names.
 
 Integration tests that call Smartabase must be opt-in and skipped by default
-unless required environment variables are present and an explicit live-test flag
-is set. Write and delete integration tests must also require a second explicit
+unless all of the following are true:
+
+- Required environment variables are available through the normal credential
+  loading path. Real credentials may be used only through local `.env`-backed
+  application behavior or environment variables; the agent must never read `.env`
+  directly as a file.
+- The configured Smartabase URL contains `sandbox`.
+- An explicit live-test flag is set.
+
+Write and delete integration tests must also require a second explicit
 confirmation variable.
+
+Live tests should be designed so they can run safely against a sandbox tenant
+without broad side effects, and should prefer smoke-test coverage plus tightly
+scoped cleanup over long-lived fixture data.
 
 ## Implementation Discipline
 

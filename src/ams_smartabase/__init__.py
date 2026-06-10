@@ -21,6 +21,7 @@ from .payloads import (
     build_profile_upsert_payloads,
     select_metadata,
 )
+from .smoke_test import run_smoke_test
 
 __all__ = [
     "DATA_CONDITION_CODES",
@@ -42,6 +43,7 @@ __all__ = [
     "flatten_profile_response",
     "load_credentials",
     "normalize_url",
+    "run_smoke_test",
     "sb_date_range",
     "select_metadata",
 ]

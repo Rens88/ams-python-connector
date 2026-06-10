@@ -4,14 +4,36 @@ library(smartabaseR)
 # Preferred credential object:
 # info <- list(username = "your.username", password = "your.password")
 #
-# If `info` does not already exist, this script tries to read `.env` and build
-# the same named list from SMARTABASE_USERNAME and SMARTABASE_PASSWORD.
+# This script prefers the repository-root `.env` file when present, and only
+# falls back to an existing `info` object if the environment variables are not
+# populated.
 
-if (file.exists(".env")) {
-  readRenviron(".env")
+find_script_path <- function() {
+  frames <- sys.frames()
+  for (index in rev(seq_along(frames))) {
+    candidate <- frames[[index]]$ofile
+    if (!is.null(candidate)) {
+      return(normalizePath(candidate, winslash = "/", mustWork = TRUE))
+    }
+  }
+  normalizePath("legacy_code/connect_ams.R", winslash = "/", mustWork = FALSE)
 }
 
-url <- Sys.getenv("SMARTABASE_URL", unset = "teamnl.smartabase.nl/sandbox")
+script_path <- find_script_path()
+repo_root <- normalizePath(file.path(dirname(script_path), ".."), winslash = "/", mustWork = TRUE)
+env_path <- file.path(repo_root, ".env")
+
+if (file.exists(env_path)) {
+  message("Reading .env file for Smartabase credentials: ", env_path)
+  readRenviron(env_path)
+} else {
+  message(
+    "No repo-root .env file found at ", env_path,
+    ". You can create one there, or define `info <- list(username = ..., password = ...)` before sourcing this file."
+  )
+}
+
+url <- Sys.getenv("SMARTABASE_URL", unset = "make-sure-smartabas_url-is-set")
 profile_form <- Sys.getenv("SMARTABASE_PROFILE_FORM", unset = "")
 if (!nzchar(profile_form)) {
   profile_form <- Sys.getenv("SMARTABASE_DEFAULT_FORM", unset = "Personal Zones")
@@ -25,11 +47,21 @@ user_value <- Sys.getenv(
 include_all_cols <- tolower(Sys.getenv("SMARTABASE_INCLUDE_ALL_COLS", unset = "true")) %in%
   c("1", "true", "yes")
 
-if (!exists("info")) {
+env_info <- list(
+  username = Sys.getenv("SMARTABASE_USERNAME", unset = ""),
+  password = Sys.getenv("SMARTABASE_PASSWORD", unset = "")
+)
+
+if (nzchar(env_info$username) && nzchar(env_info$password)) {
+  info <- env_info
+  message("Using credentials from repo-root .env / environment variables.")
+} else if (!exists("info")) {
   info <- list(
-    username = Sys.getenv("SMARTABASE_USERNAME", unset = ""),
-    password = Sys.getenv("SMARTABASE_PASSWORD", unset = "")
+    username = "",
+    password = ""
   )
+} else {
+  message("Using pre-existing `info` object from the current R session.")
 }
 
 if (!is.list(info) ||
@@ -67,6 +99,11 @@ if (nzchar(user_key)) {
     )
   }
 }
+
+message("Using user filter: ", user_filter)
+message("Using profile filter: ", profile_filter)
+message("Using include_all_cols: ", include_all_cols)
+
 
 users <- smartabaseR::sb_get_user(
   url = url,
