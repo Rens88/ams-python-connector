@@ -44,6 +44,16 @@ def write_manifest_csv(path: str | Path, rows: Iterable[Mapping[str, object]]) -
     return output
 
 
+def write_json_artifact(path: str | Path, relative_path: str | Path, payload: object) -> Path:
+    output = Path(path) / relative_path
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(redact_secrets(payload), indent=2, sort_keys=True, default=str) + "\n",
+        encoding="utf-8",
+    )
+    return output
+
+
 def safe_slug(value: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip()).strip("._")
     return slug.lower() or "operation"

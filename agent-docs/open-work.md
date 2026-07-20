@@ -27,34 +27,22 @@ information explicitly before inventing behavior.
 
 ## Updated Status Of Open Work
 
-### 1. Live mutation support is still the biggest functional gap
+### 1. Mutation execution and example workflows now exist; broader workflow coverage is next
 
-The repo can build payloads for insert, update, upsert, profile upsert, and
-delete, but there are still no client methods that actually execute:
+The repo now has:
 
-- `insert_event`
-- `update_event`
-- `upsert_event`
-- `upsert_profile`
-- `delete_event`
+- live client execution methods for event delete/insert/update/upsert and profile upsert
+- dry-run plus confirm gating
+- sandbox-only protection for live delete/modify operations
+- auditable example workflows for:
+  - replay: `examples/replay_form_entries.py`
+  - delete-only: `examples/delete_form_entries.py`
 
-Those methods still need the dry-run, manifest, and explicit confirmation
-workflow described in `AGENTS.python_connector.md`.
+The next gap is not basic mutation execution anymore. The next gap is extending
+this pattern beyond the example single-athlete workflow into reusable fetch,
+plan, delete, and upload orchestration for larger synthetic-data runs.
 
-### 2. End-to-end operation runners are still missing
-
-The repo still lacks a higher-level runner that can:
-
-- create operation folders
-- write payload artifacts
-- persist raw API responses
-- emit import/delete result manifests
-- coordinate dry run versus confirmed execution
-
-This is especially important for the synthetic-data workflow, because fetch,
-delete, and upload should be auditable as a single run.
-
-### 3. Synthetic-data workflow support is now a first-class requirement
+### 2. Synthetic-data workflow support is now a first-class requirement
 
 The next workflow should support these phases cleanly:
 
@@ -75,7 +63,19 @@ Likely implementation pieces:
 - an upload planner that maps generated CSV columns into Smartabase payloads
 - a top-level workflow runner for sandbox execution
 
-### 4. Deletion behavior needs workflow-level design
+Current status:
+
+- roster fetching now has a normalized helper through `fetch_roster`
+- missing `user_id` values can now be resolved from `username`, `email`, or `about`
+- generalized event target grouping, deletion planning, and replace workflow helpers now exist
+
+Still open:
+
+- profile-oriented planning/fetch helpers beyond the current user roster helper
+- generator-specific mapping from fetched roster data into synthetic-data inputs
+- broader multi-form orchestration that ties fetch, generation, delete, and upload together end to end
+
+### 3. Deletion behavior is now modeled beyond example workflows
 
 The synthetic-data use case introduces a decision that is not fully encoded in
 the current library:
@@ -83,9 +83,28 @@ the current library:
 - delete only overlapping records, or
 - delete all target-form data for the selected athletes
 
-The library should model this choice explicitly rather than burying it inside
-ad hoc scripts. The deletion mode should be obvious in manifests and operation
-configs.
+This choice is now modeled in both the example workflows and the generalized
+planning helpers through targeted deletion versus full-range delete mode.
+What is still open is applying that planner to broader synthetic-data pipelines
+that span more than the current event-record replacement path.
+
+### 4. Packaging and cross-repo library use should be treated as a requirement
+
+The user wants to be able to import this repository as a Python library from a
+different repository. That means the project should be maintained as an
+installable package, not just a collection of local scripts.
+
+Current status:
+
+- editable and regular local installs have been validated from an external consumer context
+- README usage now documents that the distribution name is `ams-python-connector`
+  while the import package is `ams_smartabase`
+
+Remaining follow-up tasks for that goal:
+
+- keep example scripts optional convenience entrypoints, not the only way to use functionality
+- decide whether to narrow and stabilize the supported downstream import surface further
+- consider adding an automated packaging/integration check so external-consumer validation does not stay manual
 
 ### 5. Write-input handling is still narrow
 
@@ -93,12 +112,17 @@ The guidance expects support for pandas data frames, CSV paths, and alternate ID
 resolution (`about`, `username`, `email`), plus table-field behavior and
 duplicate `user_id + start_date` splitting.
 
-Current payload builders still accept only sequences of mappings and do not yet
-implement:
+Current status:
 
-- CSV ingestion helpers
-- pandas integration
-- alternate-ID resolution through Smartabase lookups
+- event/profile write paths now accept:
+  - sequences of mappings
+  - CSV paths
+  - DataFrame-like objects supporting `to_dict("records")`
+- client write calls can optionally resolve missing `user_id` values through
+  Smartabase lookups using `username`, `email`, or `about`
+
+Still not implemented:
+
 - table-field row grouping
 - duplicate event splitting
 
@@ -151,14 +175,10 @@ working unless the project explicitly standardizes on `pytest`.
 
 ## Suggested Next Implementation Order
 
-1. Add client execution methods for delete and upload operations, behind dry-run
-   and explicit confirmation gates.
-2. Add CSV/data-frame ingestion helpers for write paths.
-3. Add a roster-fetch helper for athlete selection and synthetic generator
-   inputs.
-4. Add a deletion planner that supports `overlap_only` versus `delete_all_for_targets`.
-5. Add a sandbox-only end-to-end workflow runner for fetch -> delete -> upload.
-6. Add opt-in live integration tests for the workflow above.
+1. Add table-field row grouping and duplicate event splitting for richer write inputs.
+2. Extend roster/profile fetch helpers for generator-specific athlete selection inputs.
+3. Add a broader sandbox-safe end-to-end workflow that ties fetch -> generate -> delete -> upload together.
+4. Add opt-in live integration tests for the workflow above.
 
 ## Questions The Agent Should Ask When Needed
 
