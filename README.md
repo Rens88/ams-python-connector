@@ -2,6 +2,9 @@
 
 Python-only client utilities for Teamworks AMS/Smartabase.
 
+See `PROJECT_AIMS.md` for the structured project goals, required capabilities,
+and safety principles.
+
 ## Test Current Functionality
 
 1. Activate the virtual environment in PowerShell inside VS Code:
