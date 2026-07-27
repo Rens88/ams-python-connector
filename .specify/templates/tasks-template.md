@@ -9,7 +9,9 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: Automated tests are REQUIRED for behavior changes. Default tests must
+run offline without live Smartabase credentials. Live integration tests, when
+needed, must be opt-in and guarded.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -63,12 +65,12 @@ description: "Task list template for feature implementation"
 
 Examples of foundational tasks (adjust based on your project):
 
-- [ ] T004 Setup database schema and migrations framework
-- [ ] T005 [P] Implement authentication/authorization framework
-- [ ] T006 [P] Setup API routing and middleware structure
-- [ ] T007 Create base models/entities that all stories depend on
-- [ ] T008 Configure error handling and logging infrastructure
-- [ ] T009 Setup environment configuration management
+- [ ] T004 Create shared package structure and public interface boundaries
+- [ ] T005 [P] Configure offline automated test scaffolding
+- [ ] T006 [P] Configure credential loading/redaction safeguards
+- [ ] T007 Create dry-run, confirmation, and auditability foundations
+- [ ] T008 Configure error handling and logging infrastructure without secrets
+- [ ] T009 Verify generated/fetched AMS data and operation artifacts stay ignored
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -80,12 +82,12 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 1 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 1 (REQUIRED for behavior changes) ⚠️
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T010 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T011 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T010 [P] [US1] Offline behavior test for [capability] in tests/test_[name].py
+- [ ] T011 [P] [US1] Safety/audit/interface test for [user journey] in tests/test_[name].py
 
 ### Implementation for User Story 1
 
@@ -106,10 +108,10 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 2 (REQUIRED for behavior changes) ⚠️
 
-- [ ] T018 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T019 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T018 [P] [US2] Offline behavior test for [capability] in tests/test_[name].py
+- [ ] T019 [P] [US2] Safety/audit/interface test for [user journey] in tests/test_[name].py
 
 ### Implementation for User Story 2
 
@@ -128,10 +130,10 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 3 (REQUIRED for behavior changes) ⚠️
 
-- [ ] T024 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T025 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T024 [P] [US3] Offline behavior test for [capability] in tests/test_[name].py
+- [ ] T025 [P] [US3] Safety/audit/interface test for [user journey] in tests/test_[name].py
 
 ### Implementation for User Story 3
 
@@ -154,8 +156,11 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Documentation updates in docs/
 - [ ] TXXX Code cleanup and refactoring
 - [ ] TXXX Performance optimization across all stories
-- [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
-- [ ] TXXX Security hardening
+- [ ] TXXX [P] Additional offline tests for changed behavior in tests/
+- [ ] TXXX [P] Update README, roadmap, contributing, or agent docs for behavior changes
+- [ ] TXXX Verify no credentials, athlete data, or generated operation artifacts are tracked
+- [ ] TXXX Review public interface compatibility and document any breaking changes
+- [ ] TXXX Security and data-protection hardening
 - [ ] TXXX Run quickstart.md validation
 
 ---
@@ -179,7 +184,7 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Within Each User Story
 
-- Tests (if included) MUST be written and FAIL before implementation
+- Tests for behavior changes MUST be written and FAIL before implementation
 - Models before services
 - Services before endpoints
 - Core implementation before integration

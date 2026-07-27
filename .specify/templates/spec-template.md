@@ -98,6 +98,22 @@
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
 - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
 
+### Constitution Impact
+
+<!--
+  ACTION REQUIRED: Classify constitution-governed impacts for this feature.
+  State "None" only when the feature genuinely does not affect the area.
+-->
+
+- **Runtime boundary**: [Python-only runtime impact, or None]
+- **AMS/Smartabase API use**: [Direct API/client behavior impact, or None]
+- **Mutation safety**: [Read-only/dry-run/live mutation/destructive behavior impact, or None]
+- **Auditability**: [Operation metadata/artifact impact, or None]
+- **Public interfaces**: [Import path, method, command flag, result shape, or artifact schema impact, or None]
+- **Testing evidence**: [Automated behavior tests required, or reason no behavior changes are present]
+- **Credentials and athlete data**: [Secret/data handling impact, or None]
+- **Documentation**: [User, maintainer, or agent documentation impact, or None]
+
 ### Key Entities *(include if feature involves data)*
 
 - **[Entity 1]**: [What it represents, key attributes without implementation]

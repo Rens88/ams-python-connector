@@ -153,7 +153,7 @@ Given that feature description, do this:
 
       ## Content Quality
 
-      - [ ] No implementation details (languages, frameworks, APIs)
+      - [ ] No non-governance implementation details (languages, frameworks, APIs)
       - [ ] Focused on user value and business needs
       - [ ] Written for non-technical stakeholders
       - [ ] All mandatory sections completed
@@ -174,7 +174,7 @@ Given that feature description, do this:
       - [ ] All functional requirements have clear acceptance criteria
       - [ ] User scenarios cover primary flows
       - [ ] Feature meets measurable outcomes defined in Success Criteria
-      - [ ] No implementation details leak into specification
+      - [ ] No non-governance implementation details leak into specification
 
       ## Notes
 

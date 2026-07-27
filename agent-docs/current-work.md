@@ -70,3 +70,12 @@ Verification noted in the prior handoff:
 - 61/61 tests passed at that time.
 
 Run the current test suite again before claiming current verification.
+
+## Recent Session Summary
+
+2026-07-27:
+
+- Formalized `.specify/memory/constitution.md` as v1.0.0 with durable AMS Python Connector governance principles only.
+- Propagated constitution gates into Spec Kit plan, spec, and task templates.
+- Updated local `speckit-specify` and `speckit-tasks` skill guidance so generated artifacts align with governance constraints.
+- No Python source code was changed. `git diff --check` passed.

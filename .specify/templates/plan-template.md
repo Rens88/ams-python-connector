@@ -40,7 +40,28 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- **Python-only runtime**: Plan uses Python package/runtime behavior only; no R,
+  Rscript, or `smartabaseR` runtime dependency.
+- **Direct AMS/Smartabase API use**: Production behavior calls AMS/Smartabase
+  APIs directly through explicit Python client/HTTP abstractions.
+- **Mutation safety**: Any write/update/upsert/replace/delete path defaults to
+  dry-run/read-only planning and requires explicit confirmation for live
+  mutation.
+- **Destructive production restriction**: Production destructive behavior is
+  absent or separately justified with high-risk review, safeguards, and tests.
+- **Auditability**: Operations preserve non-secret request, plan, execution, and
+  response metadata sufficient for review and debugging.
+- **Library-first design**: Reusable behavior belongs in the Python package;
+  scripts/examples only demonstrate library APIs.
+- **Stable interfaces**: Public imports, documented methods, result shapes,
+  command flags, and artifact schemas are preserved or have documented
+  compatibility impact.
+- **Testing**: Behavior changes include automated offline tests by default;
+  live tests are opt-in and guarded.
+- **Data protection**: No credentials, live secrets, fetched AMS data, generated
+  athlete data, or unredacted fixtures are introduced.
+- **Reviewability and documentation**: Scope is small enough for review, and
+  relevant user/maintainer/agent documentation updates are planned.
 
 ## Project Structure
 
