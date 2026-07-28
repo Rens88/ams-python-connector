@@ -109,8 +109,14 @@ Implementations, documentation, and examples must:
 - Never include inline credentials in examples, tests, generated applications, or committed files.
 - Fail clearly when required credentials are unavailable; do not introduce insecure credential fallbacks.
 - Prefer in-memory processing and avoid local persistence unless it is explicit and necessary.
-- Document any caching, temporary-file, export, logging, or audit-artifact behavior.
-- Minimize retained data and provide cleanup guidance where local artifacts are created.
+- Remove temporary files after use in all workflows by default.
+- Retain temporary or generated files only when the user explicitly requests retention
+  or when a documented audit, recovery, or operational requirement makes retention
+  necessary.
+- Document any caching, temporary-file, export, logging, or audit-artifact behavior,
+  including where files are stored, why they are retained, and how they can be removed.
+- Ensure retained files follow the same credential, privacy, and sensitive-data
+  protections as other repository and runtime artifacts.
 - Require precise filters where practical and make the requested scope inspectable.
 - Make broad pulls visible, especially when many athletes, groups, forms, fields, or dates are involved.
 - Avoid printing sensitive data by default.
