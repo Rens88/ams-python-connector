@@ -14,6 +14,14 @@ Authoritative project documents:
 
 Destructive-operation safeguards are central to this repository. Live delete and modify operations are restricted to Smartabase sandbox URLs in the current implementation. On non-sandbox sites, only dry-run inspection is allowed unless that guard is intentionally changed in code and reviewed as a high-risk change.
 
+The connector remains a generic Python client; interactive and scheduled
+workflow policy belongs to callers. Scheduled workflows must not modify or
+delete existing AMS data. Where they create derived data, they should use a
+separate destination form by default to preserve the source data, while the
+destination and its naming remain workflow decisions. This does not relax the
+constitution's dry-run and explicit-confirmation requirements for live
+mutations.
+
 ## Current Capabilities
 
 The current scaffold includes:

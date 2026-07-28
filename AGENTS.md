@@ -130,6 +130,14 @@ Critical operations require typed, operation-specific human confirmation. A
 fresh confirmation is required whenever the planned scope changes. Production
 deletion is out of scope unless repository governance explicitly permits it.
 
+Agents must distinguish the generic connector from the calling workflow. Do
+not add organization-specific destination-form conventions to the connector.
+Interactive workflows own the required preview and human confirmation.
+Scheduled workflows must not modify or delete existing AMS data; when they
+create derived data, they should use a separate destination form by default to
+preserve source data. Scheduling must never be used to bypass the
+constitution's dry-run or explicit-confirmation requirements.
+
 ## Documentation And Examples
 
 Documentation and examples are part of the safety boundary. They must:

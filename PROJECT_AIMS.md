@@ -23,6 +23,21 @@ Build a safe, well-documented Python package that lets authenticated users disco
 
 The connector should be usable as an installable Python library from other repositories and should include runnable, safe-by-default examples for common workflows.
 
+## Responsibility Boundaries
+
+The Python connector is a generic communication layer over the Teamworks AMS
+API. It exposes clear, inspectable operations and results, but does not decide
+whether a caller is interactive or scheduled, choose a destination form, or
+embed organization-specific conventions.
+
+Interactive workflows built on the connector own their user-facing preview and
+human-confirmation experience. Scheduled workflows are also outside the
+connector: they must not modify or delete existing AMS data. When a scheduled
+workflow creates derived data, it should preserve the source data by writing to
+a separate destination form by default; selecting that form and its naming
+remains workflow policy. These boundaries do not weaken the dry-run and
+explicit-confirmation requirements in the repository constitution.
+
 ## A. Discover Available Teamworks AMS Terminology
 
 **Risk profile:** Low. See [Risk Model: Aim A](RISK_MODEL.md#a-discover-available-teamworks-ams-terminology).
@@ -59,7 +74,7 @@ Users should be able to insert new data into Teamworks AMS through explicit, ins
 
 - `C1` Common write inputs: build event or profile import payloads from lists of dictionaries, CSV files, and dataframe-like objects.
 - `C2` Athlete identifier resolution: resolve athlete identifiers from stable metadata such as `user_id`, username, email, or `about` where supported.
-- `C3` Safe upload execution: run in dry-run mode by default, require explicit confirmation for live writes, and save appropriately redacted local operation artifacts.
+- `C3` Safe upload support: expose inspectable upload scope and appropriately redacted results so calling workflows can satisfy the required dry-run and explicit-confirmation safeguards for live writes.
 - `C4` Upload examples: include examples for inserting one form, inserting multiple forms, and uploading data for multiple athletes.
 - `C5` Preflight preview: display the target environment, athletes or groups, forms, fields, dates, and row count before live execution.
 - `C6` Input validation: validate schemas, required fields, identifiers, value types, supported limits, and ambiguous mappings before submission.
@@ -70,7 +85,7 @@ Users should be able to insert new data into Teamworks AMS through explicit, ins
 
 **Risk profile:** Critical. See [Risk Model: Aim D](RISK_MODEL.md#d-modify-or-delete-existing-data-with-maximum-care).
 
-Modify, upsert, replace, overwrite, archive, and delete operations are inherently dangerous and must be designed around safety first. Production deletion is not an assumed project capability and requires a separate governance decision before implementation.
+Modify, upsert, replace, overwrite, archive, and delete operations are inherently dangerous and must be designed around safety first. They belong in interactive workflows, not scheduled workflows. Production deletion is not an assumed project capability and requires a separate governance decision before implementation.
 
 - `D1` Update and upsert workflows: support explicit update, upsert, and replace workflows while keeping live execution gated.
 - `D2` Exact-ID deletion: where deletion is permitted, delete existing event data only by explicit Teamworks AMS event IDs gathered or supplied intentionally.

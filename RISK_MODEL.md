@@ -46,6 +46,22 @@ The following principles apply across all project aims:
 - **No safeguard bypasses:** examples, tests, convenience wrappers, and agent-generated code must not bypass the protections required for normal use.
 - **Honest limitations:** the package must not imply that using it automatically makes a workflow secure, privacy-compliant, authorized, or endorsed by Teamworks.
 
+### Responsibility Boundaries
+
+The connector is a generic Python communication layer. It must expose
+inspectable AMS operations, results, and errors without inferring whether the
+caller is interactive or scheduled, selecting a destination form, or applying
+organization-specific naming conventions.
+
+Interactive workflows own their preview and human-confirmation experience for
+live mutations. Scheduled workflows are a caller-level concern: they must not
+modify or delete existing AMS data. A scheduled workflow that creates derived
+data should preserve the original source data by writing to a separate
+destination form by default. The particular destination and its naming are
+workflow policy, not connector behavior. All live mutations remain subject to
+the constitution's dry-run and explicit-confirmation requirements; scheduling
+must not be used to bypass them.
+
 ---
 
 ## A. Discover Available Teamworks AMS Terminology
@@ -174,6 +190,10 @@ Create workflows must:
 - Make partial success and partial failure visible and recoverable.
 - Never let a coding agent supply its own approval for a live write.
 
+When creation is part of a scheduled workflow, the workflow must preserve
+source data through a separate destination form by default and must not use
+scheduled execution to modify or delete the source records.
+
 A confirmation must describe the concrete operation. A generic `yes/no` prompt is insufficient for a large or unusual write.
 
 Example:
@@ -249,6 +269,9 @@ All modify and delete workflows must:
 - Record an operation manifest, preview summary, confirmation context, and API response summary without recording secrets.
 - Make partial execution, recovery options, and non-recoverability explicit.
 - Never conceal, downgrade, or bypass these safeguards in convenience functions, examples, tests, or agent instructions.
+
+Modify and delete workflows must be interactive. Scheduled workflows must not
+perform those operations.
 
 Example confirmation:
 
