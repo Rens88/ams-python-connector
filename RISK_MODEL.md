@@ -50,7 +50,7 @@ The following principles apply across all project aims:
 
 ## A. Discover Available Teamworks AMS Terminology
 
-**Related aims:** `A1`-`A4`  
+**Related aims:** `A1`-`A5`
 **Risk level:** Low
 
 ### Why This Risk Exists
@@ -82,7 +82,7 @@ Implementations and tests must:
 
 ## B. Pull Data From Teamworks AMS
 
-**Related aims:** `B1`-`B6`  
+**Related aims:** `B1`-`B9`
 **Risk level:** Medium
 
 ### Why This Risk Exists
@@ -133,7 +133,7 @@ Before generating code that pulls Teamworks AMS data, an agent must:
 
 ## C. Push New Data To Teamworks AMS
 
-**Related aims:** `C1`-`C4`  
+**Related aims:** `C1`-`C8`
 **Risk level:** High
 
 ### Why This Risk Exists
@@ -199,7 +199,7 @@ Tests should cover:
 
 ## D. Modify Or Delete Existing Data With Maximum Care
 
-**Related aims:** `D1`-`D5`  
+**Related aims:** `D1`-`D12`
 **Risk level:** Critical
 
 ### Why This Risk Exists
@@ -302,7 +302,7 @@ Until these questions are resolved, agents and contributors should assume that p
 
 ## E. Documentation And Examples
 
-**Related aims:** `E1`-`E5`  
+**Related aims:** `E1`-`E10`
 **Risk level:** Medium, with Critical implications when documenting destructive operations
 
 ### Why This Risk Exists
@@ -340,7 +340,7 @@ Documentation and examples must:
 
 ## F. Package Usability And Distribution
 
-**Related aims:** `F1` and later  
+**Related aims:** `F1`-`F10`
 **Risk level:** Medium
 
 ### Why This Risk Exists

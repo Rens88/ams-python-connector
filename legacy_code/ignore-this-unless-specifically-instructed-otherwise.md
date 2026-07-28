@@ -79,7 +79,7 @@ Agents may propose changes, but must not edit it automatically without explicit 
 
 ### Human-maintained memory
 - `project-brain/HUMAN-FEEDBACK.md`
-Consider this as offline feedback for the agent. 
+Consider this as offline feedback for the agent.
 This was either written when there were no more tokens.
 Or when the human was testing the app elaborately.
 Check this file at the start of a new session to see if the human left instructions/ideas/suggestions there for the agent.
