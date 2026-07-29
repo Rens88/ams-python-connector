@@ -1,8 +1,8 @@
-# Agent Guidance - Python Smartabase Client
+# Implementation Guidance - Python Smartabase Client
 
-Last updated: 2026-06-10
+Last updated: 2026-07-27
 
-## Project Aim
+## Implementation Scope
 
 This repository provides a Python-only client for Teamworks AMS/Smartabase data.
 Despite the historical `python_fetcher` name, the scope is no longer limited to
@@ -11,6 +11,9 @@ Teamworks `smartabaseR`: reading data, synchronising changed data, inserting new
 event data, updating existing event data, upserting event data, upserting profile
 data, deleting event data, authentication helpers, metadata helpers, and
 deprecated wrapper compatibility where practical.
+
+The desired product outcomes are defined in `../PROJECT_AIMS.md`; implementation
+status is tracked in `../docs/roadmap.md`.
 
 The implementation must be standalone Python. Do not require R, Rscript, an R
 runtime, or the `smartabaseR` R package at runtime. `smartabaseR` may be used
@@ -57,9 +60,9 @@ API can change independently of this repository.
 
 ## Task Handoff
 
-When looking for the next implementation tasks, read `agent-docs/open-work.md`
-first. Treat that file as the current work queue and project-direction note for
-this repository.
+When looking for the next implementation tasks, read `current-work.md` first.
+Treat that file as the short-term work queue and handoff note for this
+repository.
 
 ## Python-Only Boundary
 
