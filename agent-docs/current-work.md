@@ -68,6 +68,11 @@ Current implementation evidence indicates:
   (`results` batches containing nested `results` user rows), retains flat
   response compatibility, and rejects mixed or malformed batches without
   logging response values.
+- Event/profile normalization now applies the same fail-closed boundary to
+  known flat collections and two-level search batches. It extracts only the
+  nested event/profile records, preserves `rows -> pairs` flattening, and
+  rejects mixed direct/batched, ambiguous, deeper-than-supported, or
+  non-object shapes without including response values in errors.
 - `initialize_sandbox_athletes` now provides a sandbox-only, read-only remote
   workflow that validates and atomically stages a stable six-column local
   athlete registry plus redacted metadata and optional groups.
@@ -76,7 +81,10 @@ Current implementation evidence indicates:
   password argument or R runtime.
 - The sibling synthesis repository's initializer is a thin wrapper around the
   installed connector, and its generator accepts the connector CSV contract
-  without transformation.
+  without transformation. Its current local migration also replaces the
+  fetch and upload/delete R bridges with direct Python connector calls; this
+  broader migration has synthetic/offline test evidence only and still needs
+  authorized sandbox verification before any live-behavior claim.
 - Generalized planning/workflow helpers exist: `build_event_write_targets`, `plan_event_deletions`, and `run_event_replace_workflow`.
 
 Initializer verification on 2026-07-29:
@@ -111,6 +119,19 @@ Roster response verification on 2026-08-05:
   without retaining raw response data. The automated opt-in test and
   `include_all_cols` live fixture remain pending.
 
+Event/profile and downstream migration verification on 2026-08-05:
+
+- Fourteen focused connector flattening tests passed for flat event/profile
+  responses, two-level nested search batches, empty batches, and fail-closed
+  malformed or mixed shapes.
+- Three focused workflow tests passed for nested event-ID counting, strict
+  non-lossy positive event-ID parsing, and rejection of mixed
+  deletion-planning input.
+- The sibling synthesis repository's 54 fetch and upload/delete workflow tests
+  passed against the editable connector checkout; its full 72-test suite also
+  passed. These tests use synthetic payloads and mocked connector operations;
+  they did not call a live AMS site or authorize a live mutation.
+
 Run the current test suite again before claiming current verification.
 
 Resolved local safety issue outside this connector worktree: the sibling
@@ -136,6 +157,12 @@ or on an independent machine.
   preservation coverage; no raw live response was stored.
 - Confirmed an authorized manual named-group initializer run succeeds with the
   nested parser fix; the output values and group name were not recorded here.
+- Added strict event/profile parsing for supported flat collections and nested
+  search-result batches, with fail-closed handling for malformed, mixed, or
+  ambiguous shapes.
+- Recorded the sibling synthesis repository's in-progress native Python
+  fetch/upload/delete migration. Offline tests pass; no live event/profile
+  fetch, upload, or delete validation was performed as part of that migration.
 
 2026-07-29:
 

@@ -12,15 +12,14 @@ from typing import Any, Mapping
 import warnings
 
 from .client import OperationExecution, SmartabaseClient
-from .flatten import flatten_event_response
+from .flatten import find_event_records, flatten_event_response
 from .manifests import create_operation_folder, write_json_artifact, write_manifest_csv, write_operation_config
 from .payloads import coerce_records_input
 
 
 DEFAULT_EXAMPLE_CONFIG = Path("use_case_examples/synthetic_data/config.json")
 DEFAULT_EXAMPLE_CSV = Path("use_case_examples/synthetic_data/csv/training load template 1777445863459.csv")
-_EVENT_KEYS = ("events", "eventData", "data", "results")
-_EVENT_ID_KEYS = ("event_id", "eventId", "existingEventId", "id")
+_EVENT_ID_KEYS = ("event_id", "eventId", "existingEventId")
 _TIME_COLUMN = "Time"
 _DATE_COLUMN = "Date"
 _NAME_COLUMNS = ("First Name", "Last Name")
@@ -37,7 +36,7 @@ _COLUMN_ALIASES = {
     "finishtime": "end_time",
     "eventid": "event_id",
     "existingeventid": "event_id",
-    "id": "id",
+    "id": "event_id",
 }
 
 
@@ -713,19 +712,7 @@ def _parse_date(value: str) -> datetime:
 
 
 def _find_event_records(payload: Any) -> list[Mapping[str, Any]]:
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, Mapping)]
-    if not isinstance(payload, Mapping):
-        return []
-    for key in _EVENT_KEYS:
-        value = payload.get(key)
-        if isinstance(value, list):
-            return [item for item in value if isinstance(item, Mapping)]
-    for value in payload.values():
-        nested = _find_event_records(value)
-        if nested:
-            return nested
-    return []
+    return find_event_records(payload)
 
 
 def _extract_event_ids(records: list[Mapping[str, Any]], rows: list[Mapping[str, object]]) -> list[int]:
@@ -748,10 +735,15 @@ def _coerce_event_id(item: Mapping[str, Any]) -> int | None:
         if key not in item:
             continue
         value = item[key]
-        try:
-            return int(value)
-        except (TypeError, ValueError):
+        if isinstance(value, bool):
             return None
+        if isinstance(value, int):
+            event_id = value
+        elif isinstance(value, str) and re.fullmatch(r"\d+", value.strip()):
+            event_id = int(value.strip())
+        else:
+            return None
+        return event_id if event_id > 0 else None
     return None
 
 

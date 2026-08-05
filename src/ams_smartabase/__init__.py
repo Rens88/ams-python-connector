@@ -13,7 +13,12 @@ from .filters import (
     build_user_request,
     sb_date_range,
 )
-from .flatten import flatten_event_response, flatten_profile_response
+from .flatten import (
+    find_event_records,
+    find_profile_records,
+    flatten_event_response,
+    flatten_profile_response,
+)
 from .workflow import (
     DEFAULT_EXAMPLE_CONFIG,
     DEFAULT_EXAMPLE_CSV,
@@ -69,6 +74,8 @@ __all__ = [
     "build_sync_request",
     "build_user_request",
     "count_event_entries",
+    "find_event_records",
+    "find_profile_records",
     "flatten_event_response",
     "flatten_profile_response",
     "flatten_roster_response",
