@@ -2,11 +2,18 @@
 
 Python-only client utilities for Teamworks AMS/Smartabase. The package is intended to let users discover AMS terminology, fetch data, upload new data, and perform carefully controlled mutations without requiring the legacy R connector at runtime.
 
+This is an independent, unofficial project. It is not affiliated with,
+endorsed by, or maintained by Teamworks. Users remain responsible for ensuring
+that their access and use are authorized and comply with applicable security,
+privacy, retention, and organizational policies. Installing or using this
+package does not by itself guarantee that compliance.
+
 ## Project Documentation
 
 Authoritative project documents:
 
 - [PROJECT_AIMS.md](PROJECT_AIMS.md): desired product outcomes and success criteria.
+- [RISK_MODEL.md](RISK_MODEL.md): risk levels, trigger scenarios, safeguards, and agent behavior.
 - [docs/roadmap.md](docs/roadmap.md): implementation progress for each project aim.
 - [.specify/memory/constitution.md](.specify/memory/constitution.md): durable engineering and safety principles.
 - [CONTRIBUTING.md](CONTRIBUTING.md): human collaboration, testing, credential, and pull request guidance.
@@ -31,6 +38,7 @@ The current scaffold includes:
 - request builders for users, groups, events, profiles, sync, imports, and deletes
 - generic response flattening helpers
 - roster fetch and user ID resolution helpers
+- a Python-only sandbox athlete initializer with stable CSV and metadata output
 - payload builders for event insert/update/upsert, profile upsert, nested table rows, and deletes
 - local operation manifest writers
 - a small HTTP client wrapper
@@ -68,6 +76,17 @@ python examples/smoke_test_connection.py --discover-endpoints --list-groups
 
 The Python smoke test is read-only. It uses the repo-root `.env` file when present through the normal credential-loading path.
 
+Create a validated local athlete registry from a named sandbox group:
+
+```powershell
+ams-initialize-sandbox-athletes --env-file .env --group-name "Exact Athlete Group"
+```
+
+The command is read-only in Smartabase, refuses URLs that do not contain
+`sandbox`, and writes or replaces local files under `sandbox_state/`. Those
+files contain athlete identifiers and personal data: keep the directory
+ignored and access-controlled, and remove it when no longer needed.
+
 ## Environment
 
 Preferred variables:
@@ -75,6 +94,13 @@ Preferred variables:
 - `SMARTABASE_URL`
 - `SMARTABASE_USERNAME`
 - `SMARTABASE_PASSWORD`
+
+Optional initializer variables:
+
+- `SMARTABASE_USER_KEY`
+- `SMARTABASE_USER_VALUE`
+- `SMARTABASE_ATHLETE_GROUP`
+- `SMARTABASE_INCLUDE_ALL_COLS`
 
 Legacy aliases:
 
@@ -112,6 +138,73 @@ client.login()
 users = client.get_user(user_key="group", user_value="Athletes")
 ```
 
+Initialize a generator-compatible athlete registry without R:
+
+```python
+from pathlib import Path
+
+from ams_smartabase import (
+    SmartabaseClient,
+    initialize_sandbox_athletes,
+    load_credentials,
+)
+
+credentials = load_credentials(env_path=Path(".env"))
+result = initialize_sandbox_athletes(
+    SmartabaseClient(credentials),
+    output_csv=Path("sandbox_state/athletes.csv"),
+    output_json=Path("sandbox_state/athletes_metadata.json"),
+    group_name="Exact Athlete Group",
+    list_groups=True,
+)
+print(f"Exported {result.row_count} athletes")
+```
+
+The default CSV contract is:
+
+```text
+user_id,about,first_name,last_name,username,email
+```
+
+Rows are validated for required identity fields and duplicate IDs/names before
+the existing athlete registry is replaced. The metadata JSON records only
+non-secret operation details; it does not store credentials, session headers,
+cookies, or raw API responses. Endpoint discovery falls back to known endpoint
+names with a warning.
+
+All requested files are staged before any destination is replaced. If groups
+are requested, replacement order is groups, metadata, then the primary athlete
+CSV last. Multi-file replacement cannot be perfectly transactional: a rare
+interruption or operating-system replacement failure can leave newer ancillary
+files beside the previous athlete CSV. The metadata records
+`output_csv_sha256` (and `groups_csv_sha256` when applicable), so consumers can
+verify that each CSV matches the completed export; rerun initialization if a
+digest does not match.
+
+Omitting a selector exports every user accessible to the account and emits a
+scope warning. `--include-all-cols` (or `include_all_cols=True`) is
+experimental: tenant-specific fields can contain more sensitive profile data,
+top-level credential-like extended fields are excluded, credential-like keys
+inside nested values are redacted, and nested values are serialized as
+deterministic JSON cells. Confirm a redacted sandbox response shape before
+depending on those extra columns.
+
+The literal `sandbox` URL check is a conservative naming heuristic and refusal
+guard, not independent verification that a tenant is non-production. Confirm
+the environment and your authorization before running the initializer.
+
+Run the opt-in, read-only live initializer verification only against an
+authorized named sandbox group:
+
+```powershell
+$env:SMARTABASE_RUN_LIVE_INITIALIZER_TEST = "1"
+$env:SMARTABASE_ATHLETE_GROUP = "Exact Sandbox Test Group"
+python -m unittest tests.test_initializer_live -v
+```
+
+The live test writes to a temporary directory and reports only the row count,
+not roster contents.
+
 Write helpers accept rows of mappings, CSV paths, and dataframe-like objects that support `to_dict("records")`.
 
 ```python
@@ -134,7 +227,9 @@ result = client.insert_event(
 )
 ```
 
-External-consumer validation has been checked manually with isolated editable and wheel installs from outside this repository. An automated packaging/integration check is still recommended.
+The package exposes the same initializer API through editable and wheel
+installs, and the console command uses paths relative to the caller's current
+working directory.
 
 ## Example Workflows
 

@@ -43,6 +43,7 @@ from .roster import RosterEntry, fetch_roster, flatten_roster_response, resolve_
 from .smoke_test import run_smoke_test
 
 __all__ = [
+    "AthleteInitializationResult",
     "DATA_CONDITION_CODES",
     "DEFAULT_ENDPOINTS",
     "DEFAULT_EXAMPLE_CONFIG",
@@ -71,6 +72,7 @@ __all__ = [
     "flatten_event_response",
     "flatten_profile_response",
     "flatten_roster_response",
+    "initialize_sandbox_athletes",
     "load_example_event_workflow_input",
     "load_credentials",
     "normalize_url",
@@ -87,3 +89,19 @@ __all__ = [
     "select_metadata",
     "suggest_nested_table_candidates",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Lazily expose initializer APIs without preloading its CLI module."""
+
+    if name in {"AthleteInitializationResult", "initialize_sandbox_athletes"}:
+        from .initializer import (
+            AthleteInitializationResult,
+            initialize_sandbox_athletes,
+        )
+
+        return {
+            "AthleteInitializationResult": AthleteInitializationResult,
+            "initialize_sandbox_athletes": initialize_sandbox_athletes,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

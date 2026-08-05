@@ -5,12 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ams-python-connector"
 version = "0.1.0"
-description = "Python-only Teamworks AMS/Smartabase client utilities"
+description = "Independent, unofficial Teamworks AMS/Smartabase utilities; not affiliated with, endorsed by, or maintained by Teamworks"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "requests>=2.31",
 ]
+
+[project.scripts]
+ams-initialize-sandbox-athletes = "ams_smartabase.initializer:main"
 
 [project.optional-dependencies]
 dev = [

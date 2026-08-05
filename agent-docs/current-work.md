@@ -19,7 +19,9 @@ If future code changes need more detail about the synthetic generator, deletion 
 
 1. Add richer write-input semantics for nested Smartabase table fields.
 2. Use the tracked nested-table CSV examples under [../docs/reference-data/smartabase-nested-table-examples](../docs/reference-data/smartabase-nested-table-examples/) as reference material.
-3. Extend roster/profile fetch helpers for generator-specific athlete selection inputs.
+3. Add automated opt-in coverage for the verified named-group sandbox
+   initializer path. If `include_all_cols` needs tenant-specific verification,
+   retain only an authorized redacted or structural fixture.
 4. Add broader sandbox-safe orchestration that ties fetch, generate, delete, and upload together.
 5. Add opt-in live integration tests for sandbox workflows.
 
@@ -62,16 +64,91 @@ Current implementation evidence indicates:
 - Write inputs support `list[dict]`, CSV paths, and dataframe-like objects with `to_dict("records")`.
 - Client write calls can optionally resolve missing `user_id` values from `username`, `email`, or `about`.
 - Normalized roster helpers exist: `fetch_roster`, `flatten_roster_response`, and `resolve_user_ids`.
+- Roster normalization handles the official two-level user response shape
+  (`results` batches containing nested `results` user rows), retains flat
+  response compatibility, and rejects mixed or malformed batches without
+  logging response values.
+- `initialize_sandbox_athletes` now provides a sandbox-only, read-only remote
+  workflow that validates and atomically stages a stable six-column local
+  athlete registry plus redacted metadata and optional groups.
+- `ams-initialize-sandbox-athletes` and
+  `python -m ams_smartabase.initializer` expose the same packaged CLI without a
+  password argument or R runtime.
+- The sibling synthesis repository's initializer is a thin wrapper around the
+  installed connector, and its generator accepts the connector CSV contract
+  without transformation.
 - Generalized planning/workflow helpers exist: `build_event_write_targets`, `plan_event_deletions`, and `run_event_replace_workflow`.
 
-Verification noted in the prior handoff:
+Initializer verification on 2026-07-29:
 
-- `python3 -m unittest discover -s tests -v`
-- 61/61 tests passed at that time.
+- 66 focused initializer/config/client/endpoint/roster tests passed; the
+  opt-in live test was skipped because no authorized live-test flag or
+  named-group fixture was supplied.
+- Editable installation worked from the sibling checkout.
+- An isolated wheel exposed the same public initializer API and console entry
+  point and contained no local credential or sandbox-state artifacts.
+- The downstream compatibility suite passed 4/4 tests, including an end-to-end
+  connector-export-to-generator check and repository-root default-path checks.
+- The full connector suite ran 107 tests: 93 passed, 1 skipped, and 13
+  pre-existing workflow tests errored because ignored local
+  `use_case_examples/synthetic_data` fixtures are absent.
+
+Roster response verification on 2026-08-05:
+
+- A privacy-minimizing live probe confirmed a non-empty outer `results` batch
+  without printing or retaining athlete values.
+- The shape matches Teamworks' public `smartabaseR` user fixture, so an offline
+  synthetic fixture now covers the nested response without committing live
+  data.
+- The 46 focused roster and initializer tests pass under both the repository's
+  Windows virtual environment and the Linux Python environment.
+- The sibling synthesis initializer compatibility suite passes 12/12 against
+  the editable connector checkout.
+- The full Linux suite ran 116 tests: 102 passed, 1 opt-in live test skipped,
+  and the same 13 pre-existing workflow tests errored because the ignored
+  `use_case_examples/synthetic_data/config.json` fixture is absent.
+- An authorized manual named-group initializer rerun completed successfully
+  without retaining raw response data. The automated opt-in test and
+  `include_all_cols` live fixture remain pending.
 
 Run the current test suite again before claiming current verification.
 
+Resolved local safety issue outside this connector worktree: the sibling
+synthesis repository's legacy `test.R` and its reachable local history were
+sanitized after the exposed password was rotated. Remote-host cleanup was not
+verified from this connector work, so confirm the public repository separately
+before relying on that status. Do not copy credential values into issues, logs,
+or commits.
+
+Deployment follow-up: the sibling environment was verified with an editable
+connector install. Add an organization-approved release or commit pin before
+expecting `pip install -r requirements.txt` to reproduce that dependency in CI
+or on an independent machine.
+
 ## Recent Session Summary
+
+2026-08-05:
+
+- Corrected roster parsing for the official nested user-result batch shape.
+- Kept identity extraction shallow so query selectors and nested group/role
+  `id` or `name` fields cannot be mistaken for athlete identity.
+- Added fail-closed synthetic regression tests and existing-registry
+  preservation coverage; no raw live response was stored.
+- Confirmed an authorized manual named-group initializer run succeeds with the
+  nested parser fix; the output values and group name were not recorded here.
+
+2026-07-29:
+
+- Implemented the Python-only sandbox athlete initializer plan under aims
+  `A1`, `A3`-`A5`, `B6`-`B9`, `E1`-`E10`, and `F1`-`F8`; highest applicable
+  risk was Medium because the remote operation is read-only but the local
+  athlete export contains sensitive data and replaces files.
+- Added path-aware credentials, fail-closed v1 RPC errors, deterministic roster
+  and group serialization, generator-compatible validation, staged output,
+  public API/CLI packaging, offline tests, an opt-in live test, and safety
+  documentation.
+- Migrated the sibling synthesis initializer away from R while leaving its
+  separate legacy fetch/upload/delete R workflows unchanged.
 
 2026-07-27:
 

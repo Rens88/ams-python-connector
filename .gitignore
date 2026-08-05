@@ -13,6 +13,7 @@ __pycache__/
 fetched_data/
 smartabase_runs/
 generated_data/
+sandbox_state/
 
 # Build artifacts
 build/

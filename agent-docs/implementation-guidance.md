@@ -179,6 +179,14 @@ Implement `get_user` behavior:
 - `user_key = "current_group"` calls `currentgroup` with `{"name": ""}` and
   ignores `user_value`.
 
+User responses can contain two `results` levels: the outer list contains one
+or more search/request batches, and each batch's nested `results` list contains
+the actual user mappings. Normalize only the nested user mappings. Keep user
+identity lookup shallow so selector metadata and nested group/role `id` and
+`name` fields cannot be combined into a false athlete identity. Accept known
+flat response forms for compatibility, but reject mixed, ambiguous, or
+non-object batch members without including response values in errors.
+
 Implement `get_group` behavior:
 
 - Call `listgroups` with `{"name": ""}`.

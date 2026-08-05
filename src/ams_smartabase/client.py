@@ -95,7 +95,10 @@ class SmartabaseClient:
             headers=self._headers(include_session=True),
         )
         response.raise_for_status()
-        self.endpoints = EndpointMap.from_discovery(response.json())
+        payload = response.json()
+        if isinstance(payload, dict):
+            _raise_for_rpc_exception(payload)
+        self.endpoints = EndpointMap.from_discovery(payload)
         return self.endpoints
 
     def post_v1(self, endpoint_key: str, body: dict[str, object] | list[object]) -> Any:
@@ -108,7 +111,10 @@ class SmartabaseClient:
             headers=self._headers(),
         )
         response.raise_for_status()
-        return _json_or_text(response)
+        payload = _json_or_text(response)
+        if isinstance(payload, dict):
+            _raise_for_rpc_exception(payload)
+        return payload
 
     def get_user(self, user_key: str | None = None, user_value: object | None = None) -> Any:
         endpoint_key, body = build_user_request(user_key, user_value)
@@ -331,7 +337,7 @@ def _raise_for_rpc_exception(payload: dict[str, Any]) -> None:
         detail = value.get("detailMessage")
         if detail:
             raise RuntimeError(str(detail))
-    raise RuntimeError("Smartabase login returned an RPC exception.")
+    raise RuntimeError("Smartabase API returned an RPC exception.")
 
 
 def _smartabase_app_name(url: str) -> str:
