@@ -175,6 +175,30 @@ must not reduce those safeguards to an unattended or agent-supplied approval.
 - **Rationale:** These are workflow policy and have no generic AMS meaning.
 - **Relevant aims:** E6, F3.
 
+### DIAG-008: Empty-scope upload policy
+
+- **Date:** 2026-08-06
+- **Status:** Accepted
+- **Decision:** The connector exposes read-only event counts, verified exact
+  event IDs, immutable mutation inputs, and generic mutation safeguards. It
+  does not prohibit inserting into a non-empty event scope because appending
+  events is valid generic AMS behavior.
+- **Caller responsibility:** Synthetic Data requires its generated n-day range
+  to be empty before upload. Existing events block the complete refresh and are
+  offered only through separately executed exact-ID deletion plans. Records
+  before the generated range remain untouched.
+- **Rationale:** Whether existing data constitutes a collision follows from the
+  caller's synthetic-data purpose and pipeline sequencing, not the AMS API
+  contract. A read-before-write check is not an atomic server guarantee, so the
+  caller repeats it immediately before its first upload and reports that
+  limitation honestly.
+- **Safeguards:** No partial conflict-free upload, no automatic deletion, fresh
+  refresh after remediation, separate preview and human-confirmed execution
+  commands for every exact-ID delete plan, final read-only empty-range recheck,
+  and existing connector dry-run, sandbox, exact-ID, immutable-plan, and
+  confirmation gates.
+- **Relevant aims:** C3, C5, C7, D2, D6-D10, E6, F3.
+
 ## Agent Decision Checklist
 
 Before adding or moving a diagnostic, an agent must answer:
