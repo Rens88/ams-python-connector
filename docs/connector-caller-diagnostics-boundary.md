@@ -199,6 +199,28 @@ must not reduce those safeguards to an unattended or agent-supplied approval.
   confirmation gates.
 - **Relevant aims:** C3, C5, C7, D2, D6-D10, E6, F3.
 
+### DIAG-009: Exact-ID delete success messages
+
+- **Date:** 2026-08-06
+- **Status:** Accepted
+- **Decision:** AMS Connector recognizes the verified delete-endpoint response
+  `{"message": "Deleted <event-id>"}` as successful only when the message
+  exactly matches that shape and the returned positive integer equals the
+  requested event ID. Similar free-form text, mismatched IDs, and responses
+  containing error fields remain partial or unknown.
+- **Caller responsibility:** Synthetic Data explains the structured reason and
+  safe next step when a deletion remains partial or unknown. It must not
+  automatically retry an uncertain mutation.
+- **Rationale:** The delete endpoint's response grammar and exact-ID meaning are
+  generic AMS API behavior. Human-facing recovery instructions depend on the
+  caller's immutable plan and pipeline sequence.
+- **Safeguards:** Strict full-message matching, exact requested-ID comparison,
+  fail-closed handling for ambiguous/error responses, redacted audit output,
+  and no automatic retry.
+- **Relevant aims:** D2, D5, D6, D12, F6.
+- **Revisit when:** Authorized API evidence establishes an additional delete
+  success response shape.
+
 ## Agent Decision Checklist
 
 Before adding or moving a diagnostic, an agent must answer:

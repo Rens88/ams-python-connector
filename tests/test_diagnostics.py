@@ -142,6 +142,64 @@ class DiagnosticTests(unittest.TestCase):
                     )
                 )
 
+    def test_delete_message_confirms_only_the_exact_requested_event_id(self):
+        execution = OperationExecution(
+            endpoint="deleteevent",
+            attempted_count=1,
+            dry_run=False,
+            executed=True,
+            body=[{"eventId": 123}],
+            row_operations=[],
+            responses=[{"message": "Deleted 123"}],
+        )
+
+        assessment = assess_operation_execution(
+            execution,
+            expected_count=1,
+            operation="delete_event",
+            expected_event_id=123,
+        )
+
+        self.assertEqual(assessment.state, MutationState.CONFIRMED_COMPLETE)
+        self.assertTrue(assessment.confirmed)
+        self.assertEqual(assessment.event_ids, (123,))
+
+        mismatch = assess_operation_execution(
+            execution,
+            expected_count=1,
+            operation="delete_event",
+            expected_event_id=999,
+        )
+        self.assertEqual(mismatch.state, MutationState.PARTIAL_OR_UNKNOWN)
+        self.assertFalse(mismatch.confirmed)
+        self.assertEqual(mismatch.reason_code, "delete_event_id_mismatch")
+
+    def test_delete_message_parser_rejects_ambiguous_or_error_responses(self):
+        for response in (
+            {"message": "Deletion queued 123"},
+            {"message": "Deleted 123 extra"},
+            {"message": "Deleted 0"},
+            {"message": "Deleted 123", "error": "permission denied"},
+        ):
+            with self.subTest(response=response):
+                execution = OperationExecution(
+                    endpoint="deleteevent",
+                    attempted_count=1,
+                    dry_run=False,
+                    executed=True,
+                    body=[{"eventId": 123}],
+                    row_operations=[],
+                    responses=[response],
+                )
+                assessment = assess_operation_execution(
+                    execution,
+                    expected_count=1,
+                    operation="delete_event",
+                    expected_event_id=123,
+                )
+                self.assertEqual(assessment.state, MutationState.PARTIAL_OR_UNKNOWN)
+                self.assertFalse(assessment.confirmed)
+
     def test_acceptance_parser_rejects_error_envelopes(self):
         self.assertEqual(
             smartabase_acceptance_state({"state": "SUCCESSFULLY_IMPORTED"}),
