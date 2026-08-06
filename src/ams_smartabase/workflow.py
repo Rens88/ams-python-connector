@@ -12,15 +12,20 @@ from typing import Any, Mapping
 import warnings
 
 from .client import OperationExecution, SmartabaseClient
-from .flatten import flatten_event_response
+from .dates import format_ams_date, parse_ams_date
+from .diagnostics import (
+    AMSEventIdUnavailableError,
+    AMSResponseShapeError,
+    EXACT_EVENT_ID_KEYS,
+)
+from .flatten import find_event_records, flatten_event_response
 from .manifests import create_operation_folder, write_json_artifact, write_manifest_csv, write_operation_config
 from .payloads import coerce_records_input
 
 
 DEFAULT_EXAMPLE_CONFIG = Path("use_case_examples/synthetic_data/config.json")
 DEFAULT_EXAMPLE_CSV = Path("use_case_examples/synthetic_data/csv/training load template 1777445863459.csv")
-_EVENT_KEYS = ("events", "eventData", "data", "results")
-_EVENT_ID_KEYS = ("event_id", "eventId", "existingEventId", "id")
+EVENT_ID_KEYS = EXACT_EVENT_ID_KEYS
 _TIME_COLUMN = "Time"
 _DATE_COLUMN = "Date"
 _NAME_COLUMNS = ("First Name", "Last Name")
@@ -37,7 +42,7 @@ _COLUMN_ALIASES = {
     "finishtime": "end_time",
     "eventid": "event_id",
     "existingeventid": "event_id",
-    "id": "id",
+    "id": "event_id",
 }
 
 
@@ -179,6 +184,80 @@ def count_event_entries(
     )
 
 
+def require_exact_event_ids(result: EventCountResult) -> list[int]:
+    """Return verified exact event IDs or fail closed with safe diagnostics."""
+
+    try:
+        records = find_event_records(result.raw_payload)
+    except ValueError as exc:
+        raise AMSResponseShapeError(
+            f"Smartabase returned an unrecognized event response for {result.form!r}. "
+            "No deletion request was sent. Inspect endpoint permissions or response-shape "
+            "compatibility before retrying.",
+            code="unrecognized_event_response",
+            details={"form": result.form},
+        ) from exc
+
+    record_ids = [_coerce_event_id(record) for record in records]
+    if records and any(event_id is None for event_id in record_ids):
+        id_like_fields = sorted(
+            {
+                str(key)
+                for record in records
+                for key in record
+                if "id" in str(key).casefold()
+            },
+            key=str.casefold,
+        )
+        fields_label = ", ".join(id_like_fields) if id_like_fields else "none"
+        raise AMSEventIdUnavailableError(
+            f"Smartabase returned one or more {result.form!r} events without an exact "
+            "event ID that could be verified. Recognized event-ID fields are "
+            f"{', '.join(EVENT_ID_KEYS)}; returned ID-like fields: {fields_label}. "
+            "Generic, athlete, and profile IDs are not safe deletion targets. No deletion "
+            "request was sent. Verify endpoint permissions or obtain a response containing "
+            "exact event IDs before retrying.",
+            details={
+                "form": result.form,
+                "recognized_event_id_fields": list(EVENT_ID_KEYS),
+                "returned_id_like_fields": id_like_fields,
+            },
+        )
+
+    exact_ids = [int(value) for value in result.event_ids]
+    if result.entry_count and not exact_ids:
+        raise AMSEventIdUnavailableError(
+            f"Smartabase returned {result.entry_count} {result.form!r} event(s) without "
+            "verified exact event IDs. No deletion request was sent. Verify endpoint "
+            "permissions before retrying.",
+            details={"form": result.form, "entry_count": result.entry_count},
+        )
+    if len(exact_ids) != len(set(exact_ids)):
+        raise AMSEventIdUnavailableError(
+            f"Smartabase returned duplicate exact event IDs for {result.form!r}. No "
+            "deletion request was sent.",
+            code="duplicate_exact_event_id",
+            details={"form": result.form},
+        )
+    if records:
+        nonmissing_ids = [int(value) for value in record_ids if value is not None]
+        if len(nonmissing_ids) != len(set(nonmissing_ids)):
+            raise AMSEventIdUnavailableError(
+                f"Smartabase returned duplicate event IDs within {result.form!r}. No "
+                "deletion request was sent.",
+                code="duplicate_exact_event_id",
+                details={"form": result.form},
+            )
+        if set(nonmissing_ids) != set(exact_ids):
+            raise AMSEventIdUnavailableError(
+                f"Smartabase returned inconsistent exact event IDs for {result.form!r}. "
+                "No deletion request was sent.",
+                code="inconsistent_exact_event_id",
+                details={"form": result.form},
+            )
+    return exact_ids
+
+
 def run_event_replay_workflow(
     client: SmartabaseClient,
     target: ExampleEventWorkflowInput,
@@ -216,8 +295,7 @@ def run_event_replay_workflow(
     write_json_artifact(operation_dir, "raw_json/01_count_before_raw.json", before.raw_payload)
     manifest_rows.append(_manifest_row("count_before", "eventsearch", target.form, before_summary_path, before.entry_count))
 
-    if before.entry_count and not before.event_ids:
-        raise RuntimeError("Event replay workflow could not extract event IDs for deletion.")
+    require_exact_event_ids(before)
 
     preflight = _build_replay_preflight(target, before, delete_all_in_range=delete_all_in_range)
     for message in preflight.warnings:
@@ -347,8 +425,7 @@ def run_event_delete_workflow(
     write_json_artifact(operation_dir, "raw_json/01_count_before_raw.json", before.raw_payload)
     manifest_rows.append(_manifest_row("count_before", "eventsearch", target.form, before_summary_path, before.entry_count))
 
-    if before.entry_count and not before.event_ids:
-        raise RuntimeError("Event delete workflow could not extract event IDs for deletion.")
+    require_exact_event_ids(before)
 
     preflight = _build_replay_preflight(target, before, delete_all_in_range=delete_all_in_range)
     for message in preflight.warnings:
@@ -447,8 +524,7 @@ def run_event_replace_workflow(
 
     for target in targets:
         before = count_event_entries(client, form=target.form, user_id=target.user_id, date_range=target.date_range)
-        if before.entry_count and not before.event_ids:
-            raise RuntimeError("Event replace workflow could not extract event IDs for deletion.")
+        require_exact_event_ids(before)
         preflight = _build_replay_preflight(target, before, delete_all_in_range=delete_all_for_targets)
         for message in preflight.warnings:
             warnings.warn(message, RuntimeWarning, stacklevel=2)
@@ -585,7 +661,7 @@ def build_event_write_targets(
     form: str | None = None,
 ) -> list[EventWriteTarget]:
     grouped: dict[tuple[str, int], dict[str, object]] = {}
-    for row in coerce_records_input(records):
+    for row_index, row in enumerate(coerce_records_input(records)):
         metadata = _canonical_metadata_row(row)
         row_form = form or str(metadata.get("form") or "").strip()
         if not row_form:
@@ -597,7 +673,11 @@ def build_event_write_targets(
         if start_date_raw in (None, ""):
             raise ValueError("start_date is required for event target planning.")
         user_id = int(user_id_raw)
-        start_date = _parse_date(str(start_date_raw))
+        start_date = parse_ams_date(
+            start_date_raw,
+            field="start_date",
+            row_index=row_index,
+        )
         key = (row_form, user_id)
         if key not in grouped:
             grouped[key] = {
@@ -629,7 +709,7 @@ def build_event_write_targets(
                 about=str(item["about"]),
                 username=str(item["username"]),
                 email=str(item["email"]),
-                date_range=(min(dates).strftime("%d/%m/%Y"), max(dates).strftime("%d/%m/%Y")),
+                date_range=(format_ams_date(min(dates)), format_ams_date(max(dates))),
                 records=list(item["records"]),
             )
         )
@@ -646,8 +726,7 @@ def plan_event_deletions(
     plans: list[dict[str, object]] = []
     for target in build_event_write_targets(records, form=form):
         before = count_event_entries(client, form=target.form, user_id=target.user_id, date_range=target.date_range)
-        if before.entry_count and not before.event_ids:
-            raise RuntimeError("Event deletion planner could not extract event IDs for deletion.")
+        require_exact_event_ids(before)
         preflight = _build_replay_preflight(target, before, delete_all_in_range=delete_all_for_targets)
         summary = _preflight_summary(target, before, preflight)
         summary.update(
@@ -709,23 +788,12 @@ def _csv_row_to_event_record(
 
 
 def _parse_date(value: str) -> datetime:
-    return datetime.strptime(value.strip(), "%d/%m/%Y")
+    parsed = parse_ams_date(value, field="Date")
+    return datetime.combine(parsed, datetime.min.time())
 
 
 def _find_event_records(payload: Any) -> list[Mapping[str, Any]]:
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, Mapping)]
-    if not isinstance(payload, Mapping):
-        return []
-    for key in _EVENT_KEYS:
-        value = payload.get(key)
-        if isinstance(value, list):
-            return [item for item in value if isinstance(item, Mapping)]
-    for value in payload.values():
-        nested = _find_event_records(value)
-        if nested:
-            return nested
-    return []
+    return find_event_records(payload)
 
 
 def _extract_event_ids(records: list[Mapping[str, Any]], rows: list[Mapping[str, object]]) -> list[int]:
@@ -744,14 +812,19 @@ def _extract_event_ids(records: list[Mapping[str, Any]], rows: list[Mapping[str,
 
 
 def _coerce_event_id(item: Mapping[str, Any]) -> int | None:
-    for key in _EVENT_ID_KEYS:
+    for key in EVENT_ID_KEYS:
         if key not in item:
             continue
         value = item[key]
-        try:
-            return int(value)
-        except (TypeError, ValueError):
+        if isinstance(value, bool):
             return None
+        if isinstance(value, int):
+            event_id = value
+        elif isinstance(value, str) and re.fullmatch(r"\d+", value.strip()):
+            event_id = int(value.strip())
+        else:
+            return None
+        return event_id if event_id > 0 else None
     return None
 
 

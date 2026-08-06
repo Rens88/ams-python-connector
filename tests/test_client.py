@@ -83,6 +83,19 @@ class ClientTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "application known as bad-app"):
             client.login()
 
+    def test_post_v1_raises_rpc_exception(self):
+        class RpcSession:
+            def post(self, url, **kwargs):
+                return StubResponse({"__is_rpc_exception__": True})
+
+        client = SmartabaseClient(
+            SmartabaseCredentials("example.com/site", "user", "secret"),
+            session=RpcSession(),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "Smartabase API returned an RPC exception"):
+            client.post_v1("usersearch", {"identification": None})
+
     def test_discover_endpoints_uses_login_session_headers_and_auth(self):
         session = StubSession()
         client = SmartabaseClient(SmartabaseCredentials("example.com/site", "user", "secret"), session=session)
@@ -97,6 +110,24 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(kwargs["headers"]["X-GWT-Permutation"], "HostedMode")
         self.assertEqual(kwargs["headers"]["session-header"], "abc123")
         self.assertEqual(kwargs["headers"]["Cookie"], "JSESSIONID=abc123")
+
+    def test_discover_endpoints_raises_rpc_exception(self):
+        class RpcDiscoverySession(StubSession):
+            def get(self, url, **kwargs):
+                return StubResponse(
+                    {
+                        "__is_rpc_exception__": True,
+                        "value": {"detailMessage": "discovery unavailable"},
+                    }
+                )
+
+        client = SmartabaseClient(
+            SmartabaseCredentials("example.com/site", "user", "secret"),
+            session=RpcDiscoverySession(),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "discovery unavailable"):
+            client.discover_endpoints()
 
     def test_event_insert_dry_run_does_not_require_transport(self):
         client = SmartabaseClient(SmartabaseCredentials("example.com/site", "user", "secret"))

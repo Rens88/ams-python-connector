@@ -1,8 +1,10 @@
 # Python Sandbox Athlete Initializer Plan
 
-Status: implementation handoff  
-Branch: `python-initializer`  
+Status: implemented; manual named-group sandbox verification succeeded;
+automated opt-in and `include_all_cols` verification pending
+Branch: `python-initializer-implmentation`
 Prepared: 2026-07-28
+Implemented: 2026-07-29
 
 ## Objective
 
@@ -131,8 +133,9 @@ resolves API endpoint aliases. The Python package already implements:
 
 The initializer should explicitly log in and attempt endpoint discovery before
 fetching users. If discovery is unavailable, it should warn and fall back to
-the known endpoint names, as required by `AGENTS.python_connector.md`. A failed
-login must stop the operation before any output is replaced.
+the known endpoint names, as required by
+`agent-docs/implementation-guidance.md`. A failed login must stop the operation
+before any output is replaced.
 
 ### User selection
 
@@ -442,6 +445,8 @@ In `roster.py` or a small dedicated serialization module:
 
 - expose a base-row conversion for `RosterEntry`;
 - normalize API aliases consistently;
+- unwrap the official two-level user `results` batches while keeping identity
+  extraction shallow and rejecting mixed or malformed batches;
 - normalize group response envelopes to `{"group": "<name>"}` rows;
 - add deterministic nested-value serialization for extended columns;
 - preserve raw mappings only in memory.
@@ -539,7 +544,7 @@ Update:
 - `.env.example` with optional athlete-group settings;
 - `.gitignore` to include `sandbox_state/` for users who run the CLI in this
   repository;
-- `agent-docs/open-work.md` after the feature is complete.
+- `agent-docs/current-work.md` after the feature is complete.
 
 Explicitly state that the operation is read-only remotely but writes or
 replaces local registry files.
@@ -566,30 +571,44 @@ must remain synthesis -> connector.
 
 ## Verification Checklist
 
-- [ ] No production module imports or invokes R.
-- [ ] The feature works on a machine with no R installation.
-- [ ] The initializer is importable from `ams_smartabase`.
-- [ ] The installed console command works outside the connector checkout.
-- [ ] Login and endpoint discovery occur before roster export.
-- [ ] Endpoint-discovery failure falls back safely and is recorded.
-- [ ] Default export is the stable six-column CSV.
-- [ ] The synthesis generator accepts the output without transformation.
-- [ ] Group-filtered and all-accessible-user exports are covered.
-- [ ] Invalid or duplicate athlete data cannot replace a valid existing file.
-- [ ] Optional groups export has a stable `group` column.
-- [ ] Metadata contains no password, cookie, or session token.
-- [ ] Offline unit tests pass.
-- [ ] Opt-in sandbox smoke test passes without printing personal data.
-- [ ] Wheel and editable installs expose the same API and command.
-- [ ] README documents local overwrite and sensitive-data behavior.
+- [x] No production module imports or invokes R.
+- [x] The feature works on a machine with no R installation.
+- [x] The initializer is importable from `ams_smartabase`.
+- [x] The installed console command works outside the connector checkout.
+- [x] Login and endpoint discovery occur before roster export.
+- [x] Endpoint-discovery failure falls back safely and is recorded.
+- [x] Default export is the stable six-column CSV.
+- [x] The synthesis generator accepts the output without transformation.
+- [x] Group-filtered and all-accessible-user exports are covered.
+- [x] Invalid or duplicate athlete data cannot replace a valid existing file.
+- [x] Optional groups export has a stable `group` column.
+- [x] Metadata contains no password, cookie, or session token.
+- [x] Initializer-focused offline unit tests pass.
+- [x] The official nested user-result batch shape is covered with synthetic
+  data, including malformed-response and existing-registry preservation cases.
+- [x] An authorized manual named-group sandbox run completes without printing
+  personal data or retaining a raw response.
+- [ ] The automated opt-in sandbox smoke test passes without printing personal
+  data.
+- [ ] A redacted authorized live fixture verifies `include_all_cols` response
+  shape before that mode is treated as stable.
+- [x] Wheel and editable installs expose the same API and command.
+- [x] README documents local overwrite and sensitive-data behavior.
 
 ## Risks and Decisions to Revisit
 
 ### Live response shape
 
-`RosterEntry` handles several common aliases, but a real tenant may return a
-different envelope or nested identity shape. Obtain a redacted fixture before
-broadening normalization.
+On 2026-08-05, a value-free live structural probe found an outer mapping whose
+`results` entries were mappings but did not themselves contain user identity
+aliases. This matches Teamworks' public `smartabaseR` fixture: each outer entry
+is a search batch with another `results` list containing the actual users.
+Normalization now handles that documented shape using synthetic tests and does
+not recurse through user fields, where group and role `id`/`name` pairs would
+be ambiguous. An authorized manual named-group initializer rerun succeeded
+without retaining raw response data. The automated opt-in test and a redacted
+`include_all_cols` fixture are still required before live verification is
+marked complete.
 
 ### `include_all_cols`
 
@@ -614,8 +633,10 @@ override rather than silently removing the guard.
 ### Atomic multi-file output
 
 Replacing several files cannot be perfectly transactional across arbitrary
-filesystems. Stage every file first, replace the primary CSV last, and document
-the ordering. Keep metadata sufficient to identify the completed export.
+filesystems. The implementation stages every file first, then replaces groups,
+metadata, and the primary CSV in that order. SHA-256 digests in metadata let a
+consumer detect the rare case where replacement stops before the primary CSV.
+Rerun initialization when a recorded digest does not match its CSV.
 
 ## Definition of Done
 

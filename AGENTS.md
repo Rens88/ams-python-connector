@@ -59,6 +59,7 @@ Use these documents in this order when deciding what a change may do:
    implementation status and priorities, but may not override the aims, risk
    model, or constitution.
 5. [agent-docs/implementation-guidance.md](agent-docs/implementation-guidance.md),
+   [docs/connector-caller-diagnostics-boundary.md](docs/connector-caller-diagnostics-boundary.md),
    [CONTRIBUTING.md](CONTRIBUTING.md), Spec Kit files, and local examples guide
    execution within those higher-level constraints.
 
@@ -133,6 +134,9 @@ deletion is out of scope unless repository governance explicitly permits it.
 Agents must distinguish the generic connector from the calling workflow. Do
 not add organization-specific destination-form conventions to the connector.
 Interactive workflows own the required preview and human confirmation.
+When changing validation, exceptions, warnings, mutation states, or suggested
+remediation, apply the decision rules and preserve the dated decisions in
+[docs/connector-caller-diagnostics-boundary.md](docs/connector-caller-diagnostics-boundary.md).
 Scheduled workflows must not modify or delete existing AMS data; when they
 create derived data, they should use a separate destination form by default to
 preserve source data. Scheduling must never be used to bypass the

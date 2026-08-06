@@ -14,6 +14,7 @@ from ams_smartabase.payloads import (
     select_metadata,
     suggest_nested_table_candidates,
 )
+from ams_smartabase.diagnostics import AMSDateFormatError
 
 
 class FakeDataFrame:
@@ -90,6 +91,21 @@ class PayloadTests(unittest.TestCase):
         event = package.body["events"][0]
         self.assertEqual(event["userId"], {"userId": 123})
         self.assertEqual(event["rows"][0]["pairs"], [{"key": "Score", "value": "42"}])
+
+    def test_event_import_rejects_noncanonical_date_with_source_row(self):
+        with self.assertRaises(AMSDateFormatError) as raised:
+            build_event_import_payloads(
+                [
+                    {"user_id": 1, "start_date": "01/05/2026", "Score": 5},
+                    {"user_id": 2, "start_date": "2026-05-02", "Score": 6},
+                ],
+                form="Wellness",
+                now=datetime(2026, 5, 7, 10, 30),
+            )
+
+        self.assertEqual(raised.exception.field, "start_date")
+        self.assertEqual(raised.exception.row_index, 1)
+        self.assertFalse(raised.exception.request_sent)
 
     def test_profile_upsert_payload_accepts_dataframe_like_objects(self):
         package = build_profile_upsert_payloads(FakeDataFrame([{"user_id": 1, "Height": 180}]), form="Profile")

@@ -26,6 +26,7 @@ class EndpointMap:
     """Resolve logical endpoint names to Smartabase endpoint aliases."""
 
     aliases: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_ENDPOINTS))
+    discovered_aliases: set[str] = field(default_factory=set)
 
     def resolve(self, endpoint_key: str) -> str:
         try:
@@ -37,13 +38,19 @@ class EndpointMap:
         for key, value in aliases.items():
             if key in DEFAULT_ENDPOINTS and value:
                 self.aliases[key] = value
+                self.discovered_aliases.add(key)
 
     @classmethod
     def from_discovery(cls, payload: Any) -> "EndpointMap":
         """Build endpoint aliases from a permissive endpoint-discovery payload."""
 
+        aliases = _extract_aliases(payload)
+        if not aliases:
+            raise ValueError(
+                "Smartabase endpoint discovery returned no recognized aliases."
+            )
         endpoint_map = cls()
-        endpoint_map.update(_extract_aliases(payload))
+        endpoint_map.update(aliases)
         return endpoint_map
 
 

@@ -14,6 +14,7 @@ from ams_smartabase.filters import (
     build_user_request,
     sb_date_range,
 )
+from ams_smartabase.diagnostics import AMSDateFormatError, AMSInputValidationError
 
 
 class FilterTests(unittest.TestCase):
@@ -51,6 +52,21 @@ class FilterTests(unittest.TestCase):
 
     def test_date_range_is_day_first_and_inclusive(self):
         self.assertEqual(sb_date_range(7, date(2026, 3, 7)), ("01/03/2026", "07/03/2026"))
+
+    def test_event_request_reports_actionable_date_contract_before_transport(self):
+        with self.assertRaises(AMSDateFormatError) as raised:
+            build_event_export_request("Session", [10], ("2026-03-01", "07/03/2026"))
+
+        self.assertEqual(raised.exception.field, "start_date")
+        self.assertFalse(raised.exception.request_sent)
+        self.assertIn("DD/MM/YYYY", str(raised.exception))
+
+    def test_reversed_date_range_is_a_structured_pre_transport_error(self):
+        with self.assertRaises(AMSInputValidationError) as raised:
+            build_event_export_request("Session", [10], ("07/03/2026", "01/03/2026"))
+
+        self.assertEqual(raised.exception.code, "reversed_date_range")
+        self.assertFalse(raised.exception.request_sent)
 
 
 if __name__ == "__main__":

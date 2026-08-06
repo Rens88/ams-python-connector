@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .config import DEFAULT_USER_AGENT, SmartabaseCredentials
+from .diagnostics import MutationState
 from .endpoints import EndpointMap
 from .filters import (
     DataFilter,
@@ -34,6 +35,16 @@ class OperationExecution:
     body: object
     row_operations: list[dict[str, object]]
     responses: list[Any]
+
+    @property
+    def mutation_state(self) -> MutationState:
+        """Return the strongest generic claim available from transport state."""
+
+        return (
+            MutationState.REQUEST_STARTED
+            if self.executed
+            else MutationState.NO_REQUEST_SENT
+        )
 
 
 class SmartabaseClient:
@@ -95,7 +106,10 @@ class SmartabaseClient:
             headers=self._headers(include_session=True),
         )
         response.raise_for_status()
-        self.endpoints = EndpointMap.from_discovery(response.json())
+        payload = response.json()
+        if isinstance(payload, dict):
+            _raise_for_rpc_exception(payload)
+        self.endpoints = EndpointMap.from_discovery(payload)
         return self.endpoints
 
     def post_v1(self, endpoint_key: str, body: dict[str, object] | list[object]) -> Any:
@@ -108,7 +122,10 @@ class SmartabaseClient:
             headers=self._headers(),
         )
         response.raise_for_status()
-        return _json_or_text(response)
+        payload = _json_or_text(response)
+        if isinstance(payload, dict):
+            _raise_for_rpc_exception(payload)
+        return payload
 
     def get_user(self, user_key: str | None = None, user_value: object | None = None) -> Any:
         endpoint_key, body = build_user_request(user_key, user_value)
@@ -331,7 +348,7 @@ def _raise_for_rpc_exception(payload: dict[str, Any]) -> None:
         detail = value.get("detailMessage")
         if detail:
             raise RuntimeError(str(detail))
-    raise RuntimeError("Smartabase login returned an RPC exception.")
+    raise RuntimeError("Smartabase API returned an RPC exception.")
 
 
 def _smartabase_app_name(url: str) -> str:

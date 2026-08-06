@@ -2,15 +2,34 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 from pathlib import Path
+import re
 from typing import Mapping, MutableMapping
 from urllib.parse import urlparse, urlunparse
 
 
 DEFAULT_USER_AGENT = "ams-python-smartabase-client"
-SECRET_KEYS = {"password", "SMARTABASE_PASSWORD", "SB_PASS"}
+SECRET_KEYS = {
+    "password",
+    "smartabase_password",
+    "sb_pass",
+    "cookie",
+    "cookies",
+    "set_cookie",
+    "session_header",
+    "session_id",
+    "jsessionid",
+    "authorization",
+    "auth_header",
+    "access_token",
+    "refresh_token",
+    "id_token",
+    "bearer_token",
+    "api_key",
+    "secret",
+}
 
 
 class ConfigurationError(ValueError):
@@ -31,7 +50,11 @@ def normalize_url(url: str) -> str:
     if parsed.scheme not in {"http", "https"}:
         raise ConfigurationError(f"Unsupported URL scheme: {parsed.scheme!r}.")
     if not parsed.netloc:
-        raise ConfigurationError(f"Invalid Smartabase URL: {url!r}.")
+        raise ConfigurationError("Invalid Smartabase URL.")
+    if parsed.username is not None or parsed.password is not None:
+        raise ConfigurationError(
+            "Smartabase URL must not include embedded credentials."
+        )
 
     path = parsed.path.rstrip("/")
     normalized = parsed._replace(scheme="https", path=path, params="", query="", fragment="")
@@ -52,7 +75,7 @@ class SmartabaseCredentials:
 
     url: str
     username: str
-    password: str
+    password: str = field(repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "url", normalize_url(self.url))
@@ -62,8 +85,12 @@ class SmartabaseCredentials:
             raise ConfigurationError("Smartabase password is required.")
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> "SmartabaseCredentials":
-        return load_credentials(env)
+    def from_env(
+        cls,
+        env: Mapping[str, str] | None = None,
+        env_path: str | os.PathLike[str] = ".env",
+    ) -> "SmartabaseCredentials":
+        return load_credentials(env, env_path)
 
     def redacted_dict(self) -> dict[str, str]:
         return {
@@ -73,21 +100,37 @@ class SmartabaseCredentials:
         }
 
 
-def load_credentials(env: Mapping[str, str] | None = None) -> SmartabaseCredentials:
-    """Load credentials from the environment, falling back to a local .env file."""
+def load_credentials(
+    env: Mapping[str, str] | None = None,
+    env_path: str | os.PathLike[str] = ".env",
+) -> SmartabaseCredentials:
+    """Load credentials from the environment and an optional .env path.
+
+    Preferred ``SMARTABASE_*`` names take precedence over legacy ``SB_*``
+    aliases across both sources. Within each name family, process environment
+    values take precedence over values in the environment file.
+    """
 
     source = os.environ if env is None else env
-    dotenv_values = load_dotenv()
-    url = _first_present(source, "SMARTABASE_URL", "SB_URL")
-    if not url:
-        url = _first_present(dotenv_values, "SMARTABASE_URL", "SB_URL")
-    username = _first_present(source, "SMARTABASE_USERNAME", "SB_USER")
-    if not username:
-        username = _first_present(dotenv_values, "SMARTABASE_USERNAME", "SB_USER")
-    password = _first_present(source, "SMARTABASE_PASSWORD", "SB_PASS")
-    if not password:
-        password = _first_present(dotenv_values, "SMARTABASE_PASSWORD", "SB_PASS")
+    dotenv_values = load_dotenv(env_path)
+    url = _credential_value(source, dotenv_values, "SMARTABASE_URL", "SB_URL")
+    username = _credential_value(source, dotenv_values, "SMARTABASE_USERNAME", "SB_USER")
+    password = _credential_value(source, dotenv_values, "SMARTABASE_PASSWORD", "SB_PASS")
     return SmartabaseCredentials(url=url, username=username, password=password)
+
+
+def _credential_value(
+    source: Mapping[str, str],
+    dotenv_values: Mapping[str, str],
+    preferred_name: str,
+    legacy_name: str,
+) -> str:
+    return (
+        _first_present(source, preferred_name)
+        or _first_present(dotenv_values, preferred_name)
+        or _first_present(source, legacy_name)
+        or _first_present(dotenv_values, legacy_name)
+    )
 
 
 def load_dotenv(path: str | os.PathLike[str] = ".env") -> dict[str, str]:
@@ -113,14 +156,27 @@ def redact_secrets(value):
     if isinstance(value, Mapping):
         redacted: MutableMapping = {}
         for key, item in value.items():
-            if str(key).lower() in {"password", "smartabase_password", "sb_pass"}:
+            if _is_secret_key(key):
                 redacted[key] = "***"
             else:
                 redacted[key] = redact_secrets(item)
         return dict(redacted)
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [redact_secrets(item) for item in value]
     return value
+
+
+def _is_secret_key(key: object) -> bool:
+    text = str(key).strip()
+    text = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", text)
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", text)
+    normalized = re.sub(r"[^a-z0-9]+", "_", text.casefold()).strip("_")
+    parts = set(normalized.split("_"))
+    return (
+        normalized in SECRET_KEYS
+        or bool(parts & {"password", "passwd", "secret", "token", "cookie", "credential", "credentials"})
+        or normalized in {"private_key", "signing_key", "auth_key"}
+    )
 
 
 def _strip_quotes(value: str) -> str:

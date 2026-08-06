@@ -2,6 +2,25 @@
 
 from .client import OperationExecution, SmartabaseClient
 from .config import SmartabaseCredentials, load_credentials, normalize_url
+from .dates import AMS_DATE_FORMAT, AMS_DATE_FORMAT_LABEL, format_ams_date, parse_ams_date
+from .diagnostics import (
+    AMSConnectorError,
+    AMSDateFormatError,
+    AMSEndpointFallbackWarning,
+    AMSEventIdUnavailableError,
+    AMSInputValidationError,
+    AMSResponseShapeError,
+    EndpointProvenance,
+    EXACT_EVENT_ID_KEYS,
+    MutationAssessment,
+    MutationState,
+    SUCCESS_COUNT_KEYS,
+    SUCCESS_STATUSES,
+    assess_operation_execution,
+    discover_endpoint_provenance,
+    response_confirms_success,
+    smartabase_acceptance_state,
+)
 from .endpoints import DEFAULT_ENDPOINTS, EndpointMap
 from .filters import (
     DATA_CONDITION_CODES,
@@ -13,7 +32,12 @@ from .filters import (
     build_user_request,
     sb_date_range,
 )
-from .flatten import flatten_event_response, flatten_profile_response
+from .flatten import (
+    find_event_records,
+    find_profile_records,
+    flatten_event_response,
+    flatten_profile_response,
+)
 from .workflow import (
     DEFAULT_EXAMPLE_CONFIG,
     DEFAULT_EXAMPLE_CSV,
@@ -22,6 +46,7 @@ from .workflow import (
     ExampleEventWorkflowInput,
     build_event_write_targets,
     count_event_entries,
+    require_exact_event_ids,
     run_event_delete_workflow,
     load_example_event_workflow_input,
     plan_event_deletions,
@@ -43,21 +68,37 @@ from .roster import RosterEntry, fetch_roster, flatten_roster_response, resolve_
 from .smoke_test import run_smoke_test
 
 __all__ = [
+    "AthleteInitializationResult",
+    "AMSConnectorError",
+    "AMSDateFormatError",
+    "AMS_DATE_FORMAT",
+    "AMS_DATE_FORMAT_LABEL",
+    "AMSEndpointFallbackWarning",
+    "AMSEventIdUnavailableError",
+    "AMSInputValidationError",
+    "AMSResponseShapeError",
     "DATA_CONDITION_CODES",
     "DEFAULT_ENDPOINTS",
     "DEFAULT_EXAMPLE_CONFIG",
     "DEFAULT_EXAMPLE_CSV",
     "DataFilter",
     "EndpointMap",
+    "EndpointProvenance",
+    "EXACT_EVENT_ID_KEYS",
     "EventCountResult",
     "EventWriteTarget",
     "ExampleEventWorkflowInput",
     "OperationExecution",
+    "MutationAssessment",
+    "MutationState",
+    "SUCCESS_COUNT_KEYS",
+    "SUCCESS_STATUSES",
     "PayloadPackage",
     "RosterEntry",
     "SmartabaseClient",
     "SmartabaseCredentials",
     "build_delete_payloads",
+    "assess_operation_execution",
     "build_event_export_request",
     "build_event_import_payloads",
     "build_event_write_targets",
@@ -68,15 +109,23 @@ __all__ = [
     "build_sync_request",
     "build_user_request",
     "count_event_entries",
+    "discover_endpoint_provenance",
+    "find_event_records",
+    "find_profile_records",
     "flatten_event_response",
     "flatten_profile_response",
     "flatten_roster_response",
+    "format_ams_date",
+    "initialize_sandbox_athletes",
     "load_example_event_workflow_input",
     "load_credentials",
     "normalize_url",
     "plan_event_deletions",
+    "parse_ams_date",
     "fetch_roster",
     "resolve_user_ids",
+    "require_exact_event_ids",
+    "response_confirms_success",
     "run_event_delete_workflow",
     "run_example_event_delete",
     "run_event_replay_workflow",
@@ -86,4 +135,21 @@ __all__ = [
     "sb_date_range",
     "select_metadata",
     "suggest_nested_table_candidates",
+    "smartabase_acceptance_state",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Lazily expose initializer APIs without preloading its CLI module."""
+
+    if name in {"AthleteInitializationResult", "initialize_sandbox_athletes"}:
+        from .initializer import (
+            AthleteInitializationResult,
+            initialize_sandbox_athletes,
+        )
+
+        return {
+            "AthleteInitializationResult": AthleteInitializationResult,
+            "initialize_sandbox_athletes": initialize_sandbox_athletes,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

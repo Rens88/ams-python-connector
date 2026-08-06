@@ -1,6 +1,6 @@
 # Implementation Guidance - Python Smartabase Client
 
-Last updated: 2026-07-27
+Last updated: 2026-08-05
 
 ## Implementation Scope
 
@@ -75,9 +75,12 @@ repository.
   or another local secret manager. Never commit real credentials.
 - Do keep exported athlete/user/profile/event data out of git.
 
-The broader repository may still contain older R-bridge scripts. This file is
-the guidance for the Python-only Smartabase client and any replacement of those
-bridges.
+Historical R reference scripts may remain under explicitly marked legacy
+locations, but no active runtime path may call them. The sibling synthesis
+repository's current local migration uses the Python connector directly for
+initialization, fetching, upload planning/execution, and exact-ID deletion;
+that migration currently has synthetic/offline test evidence rather than live
+event/profile or mutation validation.
 
 ## Required Functionality Coverage
 
@@ -179,6 +182,14 @@ Implement `get_user` behavior:
 - `user_key = "current_group"` calls `currentgroup` with `{"name": ""}` and
   ignores `user_value`.
 
+User responses can contain two `results` levels: the outer list contains one
+or more search/request batches, and each batch's nested `results` list contains
+the actual user mappings. Normalize only the nested user mappings. Keep user
+identity lookup shallow so selector metadata and nested group/role `id` and
+`name` fields cannot be combined into a false athlete identity. Accept known
+flat response forms for compatibility, but reject mixed, ambiguous, or
+non-object batch members without including response values in errors.
+
 Implement `get_group` behavior:
 
 - Call `listgroups` with `{"name": ""}`.
@@ -218,6 +229,21 @@ Profile export request body:
   "userIds": [12345]
 }
 ```
+
+Event and profile responses may be returned as known flat record collections
+or as search batches with two `results` levels: the outer list contains request
+batches and each batch's nested `results` list contains the actual event or
+profile mappings. Typed event/profile normalization must flatten only those
+actual records and must preserve flat-response compatibility.
+
+Treat response-shape validation as a data-integrity and deletion-safety
+boundary. Reject mixed direct records and nested batches, multiple competing
+record collections, missing or non-list nested `results`, non-object members,
+unrecognized record objects, and deeper-than-supported batches. Error messages
+must describe the structural problem without embedding response values. Keep
+the generic `flatten_records` helper permissive only for callers that are not
+interpreting a typed AMS event/profile response; deletion planning and event-ID
+counting must use the strict event parser.
 
 Sync request body:
 

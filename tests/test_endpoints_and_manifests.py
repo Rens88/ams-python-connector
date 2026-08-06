@@ -14,6 +14,11 @@ class EndpointAndManifestTests(unittest.TestCase):
     def test_endpoint_discovery_updates_aliases(self):
         endpoints = EndpointMap.from_discovery({"endpoints": [{"name": "eventsearch", "path": "/api/v1/customEvent"}]})
         self.assertEqual(endpoints.resolve("eventsearch"), "customEvent")
+        self.assertEqual(endpoints.discovered_aliases, {"eventsearch"})
+
+    def test_endpoint_discovery_rejects_unrecognized_payload(self):
+        with self.assertRaisesRegex(ValueError, "no recognized aliases"):
+            EndpointMap.from_discovery({"status": "ok"})
 
     def test_manifest_helpers_write_expected_files(self):
         with tempfile.TemporaryDirectory() as tmp:

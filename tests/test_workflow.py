@@ -9,12 +9,15 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ams_smartabase.client import OperationExecution
+from ams_smartabase.diagnostics import AMSEventIdUnavailableError, AMSResponseShapeError
 from ams_smartabase.payloads import build_delete_payloads, build_event_import_payloads
 from ams_smartabase.workflow import (
+    EventCountResult,
     build_event_write_targets,
     count_event_entries,
     load_example_event_workflow_input,
     plan_event_deletions,
+    require_exact_event_ids,
     run_event_delete_workflow,
     run_event_replace_workflow,
     run_event_replay_workflow,
@@ -31,7 +34,7 @@ class ReplayClient:
         self.credentials = SimpleNamespace(url=url)
         for event in package.body["events"]:
             stored = dict(event)
-            stored["id"] = self.next_event_id
+            stored["eventId"] = self.next_event_id
             self.next_event_id += 1
             self.events.append(stored)
 
@@ -66,7 +69,7 @@ class ReplayClient:
         if not confirm:
             raise ValueError("confirm=True is required when dry_run=False.")
         event_ids_set = {int(value) for value in event_ids}
-        self.events = [event for event in self.events if int(event["id"]) not in event_ids_set]
+        self.events = [event for event in self.events if int(event["eventId"]) not in event_ids_set]
         return OperationExecution(
             endpoint=package.endpoint,
             attempted_count=package.attempted_count,
@@ -99,7 +102,7 @@ class ReplayClient:
             raise ValueError("confirm=True is required when dry_run=False.")
         for event in package.body["events"]:
             stored = dict(event)
-            stored["id"] = self.next_event_id
+            stored["eventId"] = self.next_event_id
             self.next_event_id += 1
             self.events.append(stored)
         return OperationExecution(
@@ -111,6 +114,23 @@ class ReplayClient:
             row_operations=package.row_operations,
             responses=[{"status": "ok", "inserted": package.attempted_count}],
         )
+
+
+class StaticEventClient:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def get_event(
+        self,
+        *,
+        form,
+        user_ids,
+        date_range,
+        time_range=("12:00 am", "11:59 pm"),
+        data_filters=None,
+        events_per_user=None,
+    ):
+        return self.payload
 
 
 class WorkflowTests(unittest.TestCase):
@@ -141,6 +161,115 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result.entry_count, target.expected_upload_count)
         self.assertEqual(len(result.event_ids), target.expected_upload_count)
         self.assertTrue(all(isinstance(value, int) for value in result.event_ids))
+
+    def test_count_event_entries_extracts_ids_from_nested_result_batches(self):
+        client = StaticEventClient(
+            {
+                "results": [
+                    {
+                        "search": {"form": "Synthetic Wellness"},
+                        "results": [
+                            {
+                                "eventId": 101,
+                                "rows": [{"row": 0, "pairs": [{"key": "Score", "value": "5"}]}],
+                            },
+                            {
+                                "eventId": 102,
+                                "rows": [{"row": 0, "pairs": [{"key": "Score", "value": "6"}]}],
+                            },
+                        ],
+                    }
+                ]
+            }
+        )
+
+        result = count_event_entries(
+            client,
+            form="Synthetic Wellness",
+            user_id=1,
+            date_range=("01/05/2026", "02/05/2026"),
+        )
+
+        self.assertEqual(result.entry_count, 2)
+        self.assertEqual(result.event_ids, [101, 102])
+        self.assertEqual([row["Score"] for row in result.rows], ["5", "6"])
+
+    def test_count_event_entries_rejects_lossy_or_nonpositive_event_ids(self):
+        for value in (True, 1.9, 0, -1, "1.9", "+1"):
+            with self.subTest(value=value):
+                result = count_event_entries(
+                    StaticEventClient({"events": [{"eventId": value}]}),
+                    form="Synthetic Wellness",
+                    user_id=1,
+                    date_range=("01/05/2026", "01/05/2026"),
+                )
+                self.assertEqual(result.entry_count, 1)
+                self.assertEqual(result.event_ids, [])
+
+        generic = count_event_entries(
+            StaticEventClient({"events": [{"id": 7, "formName": "Synthetic Wellness"}]}),
+            form="Synthetic Wellness",
+            user_id=1,
+            date_range=("01/05/2026", "01/05/2026"),
+        )
+        self.assertEqual(generic.entry_count, 1)
+        self.assertEqual(generic.event_ids, [])
+
+    def test_exact_event_id_requirement_rejects_generic_id_without_deleting(self):
+        result = count_event_entries(
+            StaticEventClient(
+                {"events": [{"id": 7, "athleteId": 1, "formName": "Synthetic Wellness"}]}
+            ),
+            form="Synthetic Wellness",
+            user_id=1,
+            date_range=("01/05/2026", "01/05/2026"),
+        )
+
+        with self.assertRaises(AMSEventIdUnavailableError) as raised:
+            require_exact_event_ids(result)
+
+        self.assertEqual(raised.exception.code, "exact_event_id_unavailable")
+        self.assertFalse(raised.exception.request_sent)
+        self.assertIn("athleteId", raised.exception.details["returned_id_like_fields"])
+        self.assertIn("No deletion request was sent", str(raised.exception))
+
+    def test_exact_event_id_requirement_rejects_unrecognized_response_shape(self):
+        result = EventCountResult(
+            form="Synthetic Wellness",
+            user_id=1,
+            date_range=("01/05/2026", "01/05/2026"),
+            entry_count=1,
+            event_ids=[],
+            rows=[],
+            raw_payload={"events": [{"eventId": 7}, {"results": []}]},
+        )
+
+        with self.assertRaises(AMSResponseShapeError) as raised:
+            require_exact_event_ids(result)
+
+        self.assertFalse(raised.exception.request_sent)
+        self.assertIn("No deletion request was sent", str(raised.exception))
+
+    def test_deletion_planning_rejects_mixed_nested_event_shape(self):
+        client = StaticEventClient(
+            {
+                "results": [
+                    {"eventId": 101},
+                    {"search": {"form": "Synthetic Wellness"}, "results": [{"eventId": 102}]},
+                ]
+            }
+        )
+        records = [
+            {
+                "form": "Synthetic Wellness",
+                "user_id": 1,
+                "start_date": "01/05/2026",
+                "Score": 5,
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "direct records and nested result batches were mixed"):
+            plan_event_deletions(client, records)
 
     def test_load_example_event_workflow_input_uses_example_training_load_data(self):
         target = load_example_event_workflow_input()
@@ -185,7 +314,7 @@ class WorkflowTests(unittest.TestCase):
         target = load_example_event_workflow_input()
         client = ReplayClient(target)
         duplicate = dict(client.events[0])
-        duplicate["id"] = client.next_event_id
+        duplicate["eventId"] = client.next_event_id
         client.next_event_id += 1
         client.events.append(duplicate)
 
@@ -210,7 +339,7 @@ class WorkflowTests(unittest.TestCase):
         target = load_example_event_workflow_input()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
-        unrelated["id"] = client.next_event_id
+        unrelated["eventId"] = client.next_event_id
         client.next_event_id += 1
         unrelated["rows"] = [{"row": 0, "pairs": [{"key": "Form ID", "value": "UNRELATED-1"}]}]
         client.events.append(unrelated)
@@ -233,7 +362,7 @@ class WorkflowTests(unittest.TestCase):
         target = load_example_event_workflow_input()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
-        unrelated["id"] = client.next_event_id
+        unrelated["eventId"] = client.next_event_id
         client.next_event_id += 1
         unrelated["rows"] = [{"row": 0, "pairs": [{"key": "Form ID", "value": "UNRELATED-1"}]}]
         client.events.append(unrelated)
@@ -273,7 +402,7 @@ class WorkflowTests(unittest.TestCase):
         target = load_example_event_workflow_input()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
-        unrelated["id"] = client.next_event_id
+        unrelated["eventId"] = client.next_event_id
         client.next_event_id += 1
         unrelated["rows"] = [{"row": 0, "pairs": [{"key": "Form ID", "value": "UNRELATED-1"}]}]
         client.events.append(unrelated)
@@ -290,7 +419,7 @@ class WorkflowTests(unittest.TestCase):
         target = load_example_event_workflow_input()
         client = ReplayClient(target)
         duplicate = dict(client.events[0])
-        duplicate["id"] = client.next_event_id
+        duplicate["eventId"] = client.next_event_id
         client.next_event_id += 1
         client.events.append(duplicate)
 
@@ -304,7 +433,7 @@ class WorkflowTests(unittest.TestCase):
         target = load_example_event_workflow_input()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
-        unrelated["id"] = client.next_event_id
+        unrelated["eventId"] = client.next_event_id
         client.next_event_id += 1
         unrelated["rows"] = [{"row": 0, "pairs": [{"key": "Form ID", "value": "UNRELATED-1"}]}]
         client.events.append(unrelated)
@@ -352,7 +481,7 @@ class WorkflowTests(unittest.TestCase):
         target = load_example_event_workflow_input()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
-        unrelated["id"] = client.next_event_id
+        unrelated["eventId"] = client.next_event_id
         client.next_event_id += 1
         unrelated["rows"] = [{"row": 0, "pairs": [{"key": "Form ID", "value": "UNRELATED-1"}]}]
         client.events.append(unrelated)
