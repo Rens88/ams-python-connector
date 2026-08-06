@@ -9,12 +9,15 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ams_smartabase.client import OperationExecution
+from ams_smartabase.diagnostics import AMSEventIdUnavailableError, AMSResponseShapeError
 from ams_smartabase.payloads import build_delete_payloads, build_event_import_payloads
 from ams_smartabase.workflow import (
+    EventCountResult,
     build_event_write_targets,
     count_event_entries,
     load_example_event_workflow_input,
     plan_event_deletions,
+    require_exact_event_ids,
     run_event_delete_workflow,
     run_event_replace_workflow,
     run_event_replay_workflow,
@@ -211,6 +214,41 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertEqual(generic.entry_count, 1)
         self.assertEqual(generic.event_ids, [])
+
+    def test_exact_event_id_requirement_rejects_generic_id_without_deleting(self):
+        result = count_event_entries(
+            StaticEventClient(
+                {"events": [{"id": 7, "athleteId": 1, "formName": "Synthetic Wellness"}]}
+            ),
+            form="Synthetic Wellness",
+            user_id=1,
+            date_range=("01/05/2026", "01/05/2026"),
+        )
+
+        with self.assertRaises(AMSEventIdUnavailableError) as raised:
+            require_exact_event_ids(result)
+
+        self.assertEqual(raised.exception.code, "exact_event_id_unavailable")
+        self.assertFalse(raised.exception.request_sent)
+        self.assertIn("athleteId", raised.exception.details["returned_id_like_fields"])
+        self.assertIn("No deletion request was sent", str(raised.exception))
+
+    def test_exact_event_id_requirement_rejects_unrecognized_response_shape(self):
+        result = EventCountResult(
+            form="Synthetic Wellness",
+            user_id=1,
+            date_range=("01/05/2026", "01/05/2026"),
+            entry_count=1,
+            event_ids=[],
+            rows=[],
+            raw_payload={"events": [{"eventId": 7}, {"results": []}]},
+        )
+
+        with self.assertRaises(AMSResponseShapeError) as raised:
+            require_exact_event_ids(result)
+
+        self.assertFalse(raised.exception.request_sent)
+        self.assertIn("No deletion request was sent", str(raised.exception))
 
     def test_deletion_planning_rejects_mixed_nested_event_shape(self):
         client = StaticEventClient(

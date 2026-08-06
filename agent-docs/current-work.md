@@ -86,6 +86,15 @@ Current implementation evidence indicates:
   broader migration has synthetic/offline test evidence only and still needs
   authorized sandbox verification before any live-behavior claim.
 - Generalized planning/workflow helpers exist: `build_event_write_targets`, `plan_event_deletions`, and `run_event_replace_workflow`.
+- Generic diagnostics now have a public, structured surface: canonical
+  `DD/MM/YYYY` parsing, typed pre-transport validation errors, sanitized
+  endpoint provenance and fallback warnings, strict exact-event-ID
+  verification, and mutation assessment that does not confuse
+  `SUCCESSFULLY_IMPORTED` with confirmed completion.
+- Provider-versus-caller ownership and dated decisions are recorded in
+  `docs/connector-caller-diagnostics-boundary.md`. The sibling Synthetic Data
+  workflow consumes these public helpers while retaining its own source
+  conversion, stage logging, previews, confirmations, and reconciliation.
 
 Initializer verification on 2026-07-29:
 
@@ -131,6 +140,18 @@ Event/profile and downstream migration verification on 2026-08-05:
   passed against the editable connector checkout; its full 72-test suite also
   passed. These tests use synthetic payloads and mocked connector operations;
   they did not call a live AMS site or authorize a live mutation.
+
+Diagnostics-boundary verification on 2026-08-06:
+
+- 63 focused connector tests passed, including canonical date errors with
+  field/row context, sanitized endpoint fallback, exact event-ID fail-closed
+  behavior, and accepted-versus-confirmed mutation classification.
+- The sibling Synthetic Data fetch/sync/refresh suites passed 69 tests and 26
+  subtests; its complete suite passed 87 tests and 47 subtests against the
+  editable connector. No live AMS request was made.
+- The full connector suite reached 129 passed and 1 skipped; the same 13 known
+  ignored-fixture workflow tests failed because
+  `use_case_examples/synthetic_data/config.json` is absent.
 
 Run the current test suite again before claiming current verification.
 

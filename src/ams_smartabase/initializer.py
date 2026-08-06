@@ -32,6 +32,7 @@ from .config import (
     redact_secrets,
 )
 from .filters import USER_KEYS
+from .diagnostics import discover_endpoint_provenance
 from .roster import (
     fetch_roster,
     normalize_group_response,
@@ -111,31 +112,13 @@ def initialize_sandbox_athletes(
     client.login()
     endpoint_status = "defaults"
     if discover_endpoints:
-        try:
-            discovered_endpoints = client.discover_endpoints()
-        except Exception:
-            warnings.warn(
-                "Smartabase endpoint discovery failed; using the connector's "
-                "known default endpoints.",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-        else:
-            endpoint_status = _endpoint_discovery_status(
-                discovered_endpoints,
-                required_aliases=_required_endpoint_aliases(
-                    resolved_key,
-                    list_groups=list_groups,
-                ),
-            )
-            if endpoint_status != "discovered":
-                warnings.warn(
-                    "Smartabase endpoint discovery did not return every "
-                    "required alias; using known default endpoints for the "
-                    "missing aliases.",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
+        endpoint_status = discover_endpoint_provenance(
+            client,
+            required_aliases=_required_endpoint_aliases(
+                resolved_key,
+                list_groups=list_groups,
+            ),
+        ).source
 
     if resolved_key is None:
         warnings.warn(

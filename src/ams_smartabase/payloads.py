@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 from typing import Any, Iterable, Mapping, Sequence
 
+from .dates import format_ams_date, parse_ams_date
+
 
 EVENT_IMPORT_ENDPOINT = "eventsimport"
 PROFILE_IMPORT_ENDPOINT = "profileimport"
@@ -125,7 +127,13 @@ def build_event_import_payloads(
             raise ValueError("All update rows require event_id.")
 
         operation = "insert" if mode == "insert" or _is_missing(event_id) else "update"
-        event = _event_payload(group["records"], form=form, entered_by_user_id=entered_by_user_id, now=clock)
+        event = _event_payload(
+            group["records"],
+            form=form,
+            entered_by_user_id=entered_by_user_id,
+            now=clock,
+            source_row_index=int(group["source_row_indices"][0]),
+        )
         if operation == "update":
             event["existingEventId"] = int(event_id)
         events.append(event)
@@ -193,6 +201,7 @@ def _event_payload(
     form: str | None,
     entered_by_user_id: int | None,
     now: datetime,
+    source_row_index: int | None = None,
 ) -> dict[str, object]:
     if not event_rows:
         raise ValueError("event payloads require at least one row.")
@@ -201,7 +210,12 @@ def _event_payload(
     if not record_form:
         raise ValueError("form is required for event payloads.")
 
-    start_dt = _date_or_default(row.get("start_date"), now.date())
+    start_dt = _date_or_default(
+        row.get("start_date"),
+        now.date(),
+        field="start_date",
+        row_index=source_row_index,
+    )
     start_time = _time_or_default(row.get("start_time"), now.time().replace(second=0, microsecond=0))
     default_end = datetime.combine(start_dt, start_time) + timedelta(hours=1)
 
@@ -210,7 +224,12 @@ def _event_payload(
     if _is_missing(row.get("start_time")) and not _is_missing(row.get("end_time")):
         raise ValueError("end_time cannot be supplied without start_time.")
 
-    end_dt = _date_or_default(row.get("end_date"), default_end.date())
+    end_dt = _date_or_default(
+        row.get("end_date"),
+        default_end.date(),
+        field="end_date",
+        row_index=source_row_index,
+    )
     end_time = _time_or_default(row.get("end_time"), default_end.time())
     user_id = _required_int(row, "user_id")
     entered_by = entered_by_user_id if entered_by_user_id is not None else row.get("entered_by_user_id")
@@ -490,14 +509,16 @@ def _is_missing(value: object) -> bool:
     return value in MISSING_VALUES
 
 
-def _date_or_default(value: object, default: date) -> date:
+def _date_or_default(
+    value: object,
+    default: date,
+    *,
+    field: str = "date",
+    row_index: int | None = None,
+) -> date:
     if _is_missing(value):
         return default
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    return datetime.strptime(str(value), "%d/%m/%Y").date()
+    return parse_ams_date(value, field=field, row_index=row_index)
 
 
 def _time_or_default(value: object, default: time) -> time:
@@ -516,7 +537,7 @@ def _time_or_default(value: object, default: time) -> time:
 
 
 def _format_date(value: date) -> str:
-    return value.strftime("%d/%m/%Y")
+    return format_ams_date(value)
 
 
 def _format_time(value: time) -> str:

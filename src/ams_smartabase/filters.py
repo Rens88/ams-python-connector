@@ -7,6 +7,9 @@ from datetime import date, datetime, timedelta
 import re
 from typing import Iterable, Sequence
 
+from .dates import AMS_DATE_FORMAT, format_ams_date, parse_ams_date
+from .diagnostics import AMSInputValidationError
+
 
 USER_KEYS = {"user_id", "about", "username", "email", "group", "current_group"}
 DATA_CONDITION_CODES = {
@@ -26,7 +29,7 @@ DATA_CONDITION_CODES = {
     ">=": 7,
 }
 
-_DATE_FORMAT = "%d/%m/%Y"
+_DATE_FORMAT = AMS_DATE_FORMAT
 _TIME_RE = re.compile(r"^\d{1,2}:\d{2}\s?(am|pm)$", re.IGNORECASE)
 
 
@@ -148,9 +151,13 @@ def sb_date_range(duration: int, end_date: str | date | None = None) -> tuple[st
 
     if duration < 1:
         raise ValueError("duration must be at least 1 day.")
-    finish = _coerce_date(end_date) if end_date is not None else date.today()
+    finish = (
+        _coerce_date(end_date, field="end_date")
+        if end_date is not None
+        else date.today()
+    )
     start = finish - timedelta(days=duration - 1)
-    return start.strftime(_DATE_FORMAT), finish.strftime(_DATE_FORMAT)
+    return format_ams_date(start), format_ams_date(finish)
 
 
 def _identity(user_key: str, value: object) -> dict[str, object]:
@@ -185,13 +192,24 @@ def _as_list(value: object | Sequence[object] | None) -> list[object]:
 
 def _validate_date_range(value: Sequence[str]) -> tuple[str, str]:
     if len(value) != 2:
-        raise ValueError("date_range must contain start and finish dates.")
+        raise AMSInputValidationError(
+            "date_range must contain start and finish dates. No API request was sent.",
+            code="invalid_date_range",
+            field="date_range",
+            expected="two values: start_date and finish_date",
+        )
     start, finish = value
-    start_dt = _coerce_date(start)
-    finish_dt = _coerce_date(finish)
+    start_dt = _coerce_date(start, field="start_date")
+    finish_dt = _coerce_date(finish, field="finish_date")
     if start_dt > finish_dt:
-        raise ValueError("start_date must be on or before finish_date.")
-    return start_dt.strftime(_DATE_FORMAT), finish_dt.strftime(_DATE_FORMAT)
+        raise AMSInputValidationError(
+            "start_date must be on or before finish_date. No API request was sent. "
+            "Correct the caller's date range before retrying.",
+            code="reversed_date_range",
+            field="date_range",
+            expected="start_date <= finish_date",
+        )
+    return format_ams_date(start_dt), format_ams_date(finish_dt)
 
 
 def _validate_time_range(value: Sequence[str]) -> tuple[str, str]:
@@ -204,9 +222,5 @@ def _validate_time_range(value: Sequence[str]) -> tuple[str, str]:
     return start, finish
 
 
-def _coerce_date(value: str | date) -> date:
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    return datetime.strptime(str(value), _DATE_FORMAT).date()
+def _coerce_date(value: str | date, *, field: str = "date") -> date:
+    return parse_ams_date(value, field=field)

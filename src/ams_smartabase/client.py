@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .config import DEFAULT_USER_AGENT, SmartabaseCredentials
+from .diagnostics import MutationState
 from .endpoints import EndpointMap
 from .filters import (
     DataFilter,
@@ -34,6 +35,16 @@ class OperationExecution:
     body: object
     row_operations: list[dict[str, object]]
     responses: list[Any]
+
+    @property
+    def mutation_state(self) -> MutationState:
+        """Return the strongest generic claim available from transport state."""
+
+        return (
+            MutationState.REQUEST_STARTED
+            if self.executed
+            else MutationState.NO_REQUEST_SENT
+        )
 
 
 class SmartabaseClient:

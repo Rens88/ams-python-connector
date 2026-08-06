@@ -14,6 +14,7 @@ Authoritative project documents:
 
 - [PROJECT_AIMS.md](PROJECT_AIMS.md): desired product outcomes and success criteria.
 - [RISK_MODEL.md](RISK_MODEL.md): risk levels, trigger scenarios, safeguards, and agent behavior.
+- [docs/connector-caller-diagnostics-boundary.md](docs/connector-caller-diagnostics-boundary.md): provider-versus-caller ownership for validation, warnings, errors, and recovery decisions.
 - [docs/roadmap.md](docs/roadmap.md): implementation progress for each project aim.
 - [.specify/memory/constitution.md](.specify/memory/constitution.md): durable engineering and safety principles.
 - [CONTRIBUTING.md](CONTRIBUTING.md): human collaboration, testing, credential, and pull request guidance.
@@ -137,6 +138,35 @@ client.login()
 
 users = client.get_user(user_key="group", user_value="Athletes")
 ```
+
+### Diagnostics And Caller Responsibilities
+
+The connector exposes stable diagnostic types and structured context for
+generic AMS behavior. Calling applications should catch these types, add their
+own file/run/stage context, and perform source-specific corrections without
+parsing error-message text. For example, invalid or ambiguous date strings are
+rejected before transport:
+
+```python
+from ams_smartabase import AMSDateFormatError, parse_ams_date
+
+try:
+    start_date = parse_ams_date(source_value, field="start_date", row_index=12)
+except AMSDateFormatError as error:
+    print(error.as_dict())  # includes DD/MM/YYYY and no_request_sent
+    raise
+```
+
+`discover_endpoint_provenance(...)` provides a typed, sanitized fallback
+warning plus the exact aliases that were discovered or defaulted.
+`require_exact_event_ids(...)` fails closed when a read response cannot prove
+deletable event IDs. `assess_operation_execution(...)` distinguishes
+`confirmed_complete`, `accepted_unverified`, `partial_or_unknown`, and
+`no_request_sent`; callers must reconcile `accepted_unverified` rather than
+claiming success or retrying automatically.
+
+The complete provider-versus-caller decision rules and dated examples are in
+[the diagnostics boundary record](docs/connector-caller-diagnostics-boundary.md).
 
 Initialize a generator-compatible athlete registry without R:
 
