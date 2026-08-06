@@ -1,0 +1,12 @@
+{
+  "athletes": [
+    {
+      "first_name": "Taylor",
+      "last_name": "Example",
+      "about": "Taylor Example",
+      "smartabase_user_id": 100001,
+      "username": "taylor.example",
+      "email": "taylor@example.invalid"
+    }
+  ]
+}

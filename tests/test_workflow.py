@@ -24,6 +24,18 @@ from ams_smartabase.workflow import (
 )
 
 
+_WORKFLOW_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "workflow"
+_WORKFLOW_FIXTURE_CONFIG = _WORKFLOW_FIXTURE_DIR / "config.json"
+_WORKFLOW_FIXTURE_CSV = _WORKFLOW_FIXTURE_DIR / "training load template synthetic.csv"
+
+
+def _load_synthetic_workflow_target():
+    return load_example_event_workflow_input(
+        csv_path=_WORKFLOW_FIXTURE_CSV,
+        config_path=_WORKFLOW_FIXTURE_CONFIG,
+    )
+
+
 class ReplayClient:
     def __init__(self, target, *, sandbox=True):
         package = build_event_import_payloads(target.records, form=target.form, mode="insert")
@@ -119,6 +131,7 @@ class ReplayClient:
 class StaticEventClient:
     def __init__(self, payload):
         self.payload = payload
+        self.delete_calls = 0
 
     def get_event(
         self,
@@ -131,6 +144,10 @@ class StaticEventClient:
         events_per_user=None,
     ):
         return self.payload
+
+    def delete_event(self, event_ids, *, dry_run=True, confirm=False):
+        self.delete_calls += 1
+        raise AssertionError("delete_event must not be called after exact-ID validation fails")
 
 
 class WorkflowTests(unittest.TestCase):
@@ -153,7 +170,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(targets[1].about, "Ada Lovelace")
 
     def test_count_event_entries_extracts_ids_from_realistic_eventsearch_payload(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
 
         result = count_event_entries(client, form=target.form, user_id=target.user_id, date_range=target.date_range)
@@ -195,43 +212,85 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual([row["Score"] for row in result.rows], ["5", "6"])
 
     def test_count_event_entries_rejects_lossy_or_nonpositive_event_ids(self):
-        for value in (True, 1.9, 0, -1, "1.9", "+1"):
-            with self.subTest(value=value):
-                result = count_event_entries(
-                    StaticEventClient({"events": [{"eventId": value}]}),
-                    form="Synthetic Wellness",
-                    user_id=1,
-                    date_range=("01/05/2026", "01/05/2026"),
-                )
-                self.assertEqual(result.entry_count, 1)
-                self.assertEqual(result.event_ids, [])
+        for id_key in ("eventId", "id"):
+            for value in (True, 1.9, 0, -1, "1.9", "+1"):
+                with self.subTest(id_key=id_key, value=value):
+                    event = {
+                        id_key: value,
+                        "userId": 1,
+                        "formName": "Synthetic Wellness",
+                        "startDate": "01/05/2026",
+                    }
+                    result = count_event_entries(
+                        StaticEventClient({"events": [event]}),
+                        form="Synthetic Wellness",
+                        user_id=1,
+                        date_range=("01/05/2026", "01/05/2026"),
+                    )
+                    self.assertEqual(result.entry_count, 1)
+                    self.assertEqual(result.event_ids, [])
 
-        generic = count_event_entries(
-            StaticEventClient({"events": [{"id": 7, "formName": "Synthetic Wellness"}]}),
-            form="Synthetic Wellness",
-            user_id=1,
-            date_range=("01/05/2026", "01/05/2026"),
-        )
-        self.assertEqual(generic.entry_count, 1)
-        self.assertEqual(generic.event_ids, [])
-
-    def test_exact_event_id_requirement_rejects_generic_id_without_deleting(self):
+    def test_exact_event_id_requirement_accepts_raw_eventsearch_id(self):
         result = count_event_entries(
             StaticEventClient(
-                {"events": [{"id": 7, "athleteId": 1, "formName": "Synthetic Wellness"}]}
+                {
+                    "events": [
+                        {
+                            "id": 7,
+                            "userId": 1,
+                            "formName": "WSV Wellness",
+                            "startDate": "01/05/2026",
+                        }
+                    ]
+                }
             ),
-            form="Synthetic Wellness",
+            form="WSV Wellness",
             user_id=1,
             date_range=("01/05/2026", "01/05/2026"),
         )
 
-        with self.assertRaises(AMSEventIdUnavailableError) as raised:
-            require_exact_event_ids(result)
+        self.assertEqual(result.event_ids, [7])
+        self.assertEqual(require_exact_event_ids(result), [7])
 
-        self.assertEqual(raised.exception.code, "exact_event_id_unavailable")
+    def test_count_event_entries_rejects_an_id_only_object(self):
+        with self.assertRaisesRegex(ValueError, "recognizable event objects"):
+            count_event_entries(
+                StaticEventClient({"events": [{"id": 7}]}),
+                form="Synthetic Wellness",
+                user_id=1,
+                date_range=("01/05/2026", "01/05/2026"),
+            )
+
+    def test_invalid_raw_event_id_stops_delete_workflow_before_deletion(self):
+        target = SimpleNamespace(
+            csv_path=Path("unused.csv"),
+            form="Synthetic Wellness",
+            user_id=1,
+            about="Synthetic Athlete",
+            username="synthetic.athlete",
+            email="synthetic@example.invalid",
+            date_range=("01/05/2026", "01/05/2026"),
+            expected_upload_count=1,
+        )
+        client = StaticEventClient(
+            {
+                "events": [
+                    {
+                        "id": True,
+                        "userId": target.user_id,
+                        "formName": target.form,
+                        "startDate": target.date_range[0],
+                    }
+                ]
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(AMSEventIdUnavailableError) as raised:
+                run_event_delete_workflow(client, target, base_dir=temp_dir)
+
         self.assertFalse(raised.exception.request_sent)
-        self.assertIn("athleteId", raised.exception.details["returned_id_like_fields"])
-        self.assertIn("No deletion request was sent", str(raised.exception))
+        self.assertEqual(client.delete_calls, 0)
 
     def test_exact_event_id_requirement_rejects_unrecognized_response_shape(self):
         result = EventCountResult(
@@ -271,19 +330,19 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "direct records and nested result batches were mixed"):
             plan_event_deletions(client, records)
 
-    def test_load_example_event_workflow_input_uses_example_training_load_data(self):
-        target = load_example_event_workflow_input()
+    def test_load_example_event_workflow_input_uses_committed_synthetic_data(self):
+        target = _load_synthetic_workflow_target()
 
         self.assertEqual(target.form, "Training Load")
-        self.assertEqual(target.user_id, 60521)
-        self.assertEqual(target.about, "NOC01 MaleAthlete")
-        self.assertEqual(target.date_range, ("14/04/2026", "08/06/2026"))
-        self.assertEqual(target.expected_upload_count, 69)
+        self.assertEqual(target.user_id, 100001)
+        self.assertEqual(target.about, "Taylor Example")
+        self.assertEqual(target.date_range, ("01/05/2026", "03/05/2026"))
+        self.assertEqual(target.expected_upload_count, 3)
         self.assertEqual(target.records[0]["start_time"], "09:00")
-        self.assertEqual(target.records[0]["Form ID"], "5000001")
+        self.assertEqual(target.records[0]["Form ID"], "SYNTH-LOAD-001")
 
     def test_run_event_replay_workflow_counts_delete_and_reinsert_for_example_target(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -311,7 +370,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn("count_after_upload", manifest_path.read_text(encoding="utf-8"))
 
     def test_run_event_replay_workflow_warns_when_more_existing_events_are_deleted_than_uploaded(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
         duplicate = dict(client.events[0])
         duplicate["eventId"] = client.next_event_id
@@ -336,7 +395,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("same number of datapoints is uploaded", str(caught[0].message))
 
     def test_run_event_replay_workflow_preserves_unmatched_events_in_same_date_range(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
         unrelated["eventId"] = client.next_event_id
@@ -359,7 +418,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(summary["counts"]["after_upload"]["entry_count"], target.expected_upload_count + 1)
 
     def test_run_event_replay_workflow_can_delete_all_events_in_range_in_sandbox(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
         unrelated["eventId"] = client.next_event_id
@@ -386,7 +445,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(summary["counts"]["after_upload"]["entry_count"], target.expected_upload_count)
 
     def test_run_event_replay_workflow_rejects_delete_all_in_range_outside_sandbox(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target, sandbox=False)
 
         with self.assertRaisesRegex(PermissionError, "delete_all_in_range"):
@@ -399,7 +458,7 @@ class WorkflowTests(unittest.TestCase):
             )
 
     def test_plan_event_deletions_summarizes_targeted_deletes(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
         unrelated["eventId"] = client.next_event_id
@@ -416,7 +475,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(plans[0]["unmatched_existing_count"], 1)
 
     def test_plan_event_deletions_supports_full_range_mode(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
         duplicate = dict(client.events[0])
         duplicate["eventId"] = client.next_event_id
@@ -430,7 +489,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(plans[0]["delete_all_for_targets"])
 
     def test_run_event_replace_workflow_replaces_records_for_generic_inputs(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
         unrelated["eventId"] = client.next_event_id
@@ -457,7 +516,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(summary["counts"]["after_upload"][0]["entry_count"], target.expected_upload_count + 1)
 
     def test_run_event_delete_workflow_deletes_without_uploading(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -478,7 +537,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(client.insert_calls, 0)
 
     def test_run_event_delete_workflow_can_delete_all_events_in_range_in_sandbox(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target)
         unrelated = dict(client.events[0])
         unrelated["eventId"] = client.next_event_id
@@ -505,7 +564,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(caught), 1)
 
     def test_run_event_delete_workflow_rejects_delete_all_in_range_outside_sandbox(self):
-        target = load_example_event_workflow_input()
+        target = _load_synthetic_workflow_target()
         client = ReplayClient(target, sandbox=False)
 
         with self.assertRaisesRegex(PermissionError, "delete_all_in_range"):

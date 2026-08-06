@@ -169,6 +169,18 @@ or on an independent machine.
 
 ## Recent Session Summary
 
+2026-08-06:
+
+- Replaced the workflow tests' dependency on ignored local
+  `use_case_examples/synthetic_data` files with a committed, deterministic
+  fixture pair under `tests/fixtures/workflow`.
+- The fixture contains fictional test-only values and is passed explicitly to
+  `load_example_event_workflow_input()`; the ignored operational example
+  directory remains excluded from version control.
+- The 13 previously known missing-fixture failures are resolved. All 21
+  workflow tests pass, and the full connector suite passes 144 tests with the
+  opt-in live test skipped. No live AMS request or mutation was performed.
+
 2026-08-05:
 
 - Corrected roster parsing for the official nested user-result batch shape.
