@@ -1,5 +1,21 @@
 <!--
 Sync Impact Report
+Version change: 1.0.0 -> 1.1.0
+Modified principles (this amendment):
+- IV. Explicit Confirmation For Live Mutation — added the HUMAN-mode
+  create-only exception (tiered safety modes, specs/001-api-safety-modes/spec.md;
+  issue #5). Update/upsert/replace/overwrite/archive/delete keep the full
+  typed-phrase requirement in every mode, unchanged.
+Templates requiring updates (this amendment):
+- RISK_MODEL.md Category C (done, same PR)
+- AGENTS.md (done, same PR — agent may draft an AUTO qualification only under
+  active human supervision, never invoke or approve AUTO itself)
+Follow-up TODOs (this amendment):
+- The AUTO-mode runner-identity binding mechanism (specs/001-api-safety-modes/spec.md)
+  is implemented as a first proposal and is explicitly flagged for maintainer
+  decision, not treated as settled by this amendment.
+
+---
 Version change: unversioned -> 1.0.0
 Modified principles:
 - Python-Only Runtime -> I. Python-Only Runtime
@@ -75,8 +91,22 @@ Live mutation MUST require explicit confirmation separate from credentials and
 separate from choosing mutation parameters. Confirmation MUST be visible in the
 public workflow or API surface that initiates the live operation.
 
+**HUMAN-mode exception (added with the tiered safety modes feature, see
+`specs/001-api-safety-modes/spec.md`):** for create-only writes to a distinct,
+non-colliding destination scope, a single explicit yes/no decision MAY replace
+an operation-specific typed phrase, provided that decision is made in a real
+interactive terminal session (verified by the runtime, not merely claimed) and
+is requested only after the complete immutable operation plan has been shown.
+This exception applies to create-only writes exclusively; update, upsert,
+replace, overwrite, archive, and delete retain the full typed-phrase
+requirement in every mode, with no exception.
+
 Rationale: valid credentials prove access, not intent. Live mutation needs an
-independent user decision at execution time.
+independent user decision at execution time. The HUMAN-mode exception trades
+phrase-typing friction for a stronger guarantee — a verified live human
+terminal session — for the one operation class (create-only, to a separate,
+checked destination) where a mistake is a duplicate row rather than lost or
+altered data.
 
 ### V. Destructive Production Behavior Is Restricted
 
@@ -204,4 +234,4 @@ implementation review, and pull request review. A work item that cannot satisfy
 a MUST-level principle is blocked until the work changes or this constitution is
 amended.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-07-27
+**Version**: 1.1.0 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-08-07

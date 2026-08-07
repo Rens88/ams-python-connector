@@ -196,6 +196,19 @@ scheduled execution to modify or delete the source records.
 
 A confirmation must describe the concrete operation. A generic `yes/no` prompt is insufficient for a large or unusual write.
 
+**HUMAN-mode exception** (tiered safety modes, `specs/001-api-safety-modes/spec.md`,
+issue #5, Constitution Principle IV): for a create-only write to a distinct,
+non-colliding destination scope, a single explicit yes/no decision satisfies
+this requirement in place of an operation-specific typed phrase, but only when
+the runtime verifies the decision came from a real interactive terminal
+session — not a script, not a coding agent, not a piped or pre-supplied
+answer. Every other requirement in this section (dry-run default, full
+preview, schema validation, duplicate/retry safety, audit manifest, no
+agent-supplied approval) still applies unchanged in HUMAN mode. AUTO mode
+removes the per-run decision entirely but only for a workflow holding a
+current, human-granted qualification bound to an exact plan and a runner
+identity a coding-agent session does not have; see User Story 3 in the spec.
+
 Example:
 
 ```text
