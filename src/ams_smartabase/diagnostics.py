@@ -13,6 +13,7 @@ from .endpoints import DEFAULT_ENDPOINTS
 
 
 EXACT_EVENT_ID_KEYS = ("event_id", "eventId", "existingEventId")
+EXACT_EVENT_ID_LIST_KEYS = ("ids",)
 SUCCESS_STATUSES = {
     "ok",
     "success",
@@ -378,8 +379,11 @@ def smartabase_acceptance_state(response: object, *, _depth: int = 0) -> str | N
     if not isinstance(response, str):
         return None
     text = response.strip()
-    if text.casefold() == "successfully_imported":
+    normalized = text.casefold()
+    if normalized == "successfully_imported":
         return "SUCCESSFULLY_IMPORTED"
+    if normalized == "success":
+        return "SUCCESS"
     if text[:1] not in {"{", "[", '"'}:
         return None
     try:
@@ -430,6 +434,13 @@ def _extract_event_ids(value: object) -> list[int]:
                     event_id = _response_count(nested)
                     if event_id is not None and event_id > 0:
                         found.add(event_id)
+                elif str(key) in EXACT_EVENT_ID_LIST_KEYS and isinstance(nested, list):
+                    # Smartabase eventsimport success responses return new IDs as a
+                    # plain list under "ids" rather than under EXACT_EVENT_ID_KEYS.
+                    for candidate in nested:
+                        event_id = _response_count(candidate)
+                        if event_id is not None and event_id > 0:
+                            found.add(event_id)
                 else:
                     visit(nested)
         elif isinstance(item, list):

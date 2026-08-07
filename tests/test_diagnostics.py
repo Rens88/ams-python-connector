@@ -142,6 +142,76 @@ class DiagnosticTests(unittest.TestCase):
                     )
                 )
 
+    def test_insert_response_with_plain_ids_list_is_confirmed_complete(self):
+        # Reproduces a real Smartabase eventsimport success response observed
+        # against a sandbox tenant: the new event ID comes back as a plain
+        # "ids" list, not under any of the previously-recognized event-ID keys.
+        execution = OperationExecution(
+            endpoint="eventsimport",
+            attempted_count=1,
+            dry_run=False,
+            executed=True,
+            body={},
+            row_operations=[],
+            responses=[
+                {
+                    "result": {"state": "SUCCESSFULLY_IMPORTED"},
+                    "eventImportResultForForm": [
+                        {
+                            "formName": "Garmin HRV Summary",
+                            "eventImportResults": {
+                                "state": "SUCCESSFULLY_IMPORTED",
+                                "message": "1 out of 1 records successfully imported.",
+                                "ids": [34368286],
+                            },
+                        }
+                    ],
+                }
+            ],
+        )
+
+        assessment = assess_operation_execution(
+            execution,
+            expected_count=1,
+            operation="insert_event",
+        )
+
+        self.assertEqual(assessment.state, MutationState.CONFIRMED_COMPLETE)
+        self.assertTrue(assessment.confirmed)
+        self.assertEqual(assessment.event_ids, (34368286,))
+
+    def test_delete_response_with_plain_success_state_is_recognized(self):
+        # Reproduces a real Smartabase deleteevent success response: no
+        # structured event-ID field at all, only free text plus a bare
+        # "state": "SUCCESS". The connector deliberately does not parse the
+        # free-text message for an ID (message text is not a stable
+        # contract), so this stops short of CONFIRMED_COMPLETE — but it must
+        # no longer be misclassified as an unrecognized/error-shaped response.
+        response = {"message": "Deleted 34368029", "state": "SUCCESS"}
+        self.assertEqual(smartabase_acceptance_state(response), "SUCCESS")
+        self.assertTrue(response_confirms_success(response, 1, "delete_event"))
+
+        execution = OperationExecution(
+            endpoint="deleteevent",
+            attempted_count=1,
+            dry_run=False,
+            executed=True,
+            body={},
+            row_operations=[],
+            responses=[response],
+        )
+
+        assessment = assess_operation_execution(
+            execution,
+            expected_count=1,
+            operation="delete_event",
+            expected_event_id=34368029,
+        )
+
+        self.assertEqual(assessment.state, MutationState.PARTIAL_OR_UNKNOWN)
+        self.assertEqual(assessment.reason_code, "delete_event_id_mismatch")
+        self.assertNotEqual(assessment.reason_code, "unrecognized_or_error_response")
+
     def test_acceptance_parser_rejects_error_envelopes(self):
         self.assertEqual(
             smartabase_acceptance_state({"state": "SUCCESSFULLY_IMPORTED"}),
