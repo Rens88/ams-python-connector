@@ -221,6 +221,66 @@ must not reduce those safeguards to an unattended or agent-supplied approval.
 - **Revisit when:** Authorized API evidence establishes an additional delete
   success response shape.
 
+### DIAG-010: Verified continuation after partial sandbox refresh
+
+- **Date:** 2026-08-10
+- **Status:** Accepted
+- **Decision:** The connector remains generic and does not decide whether a
+  non-empty scope is safe to continue. It exposes flattened fetched rows,
+  verified exact event IDs, immutable mutation inputs, and mutation-state
+  evidence. Synthetic Data may treat existing rows as an interrupted refresh
+  only when an explicitly selected immutable parent plan and a fresh read-only
+  comparison prove exact normalized row-multiset agreement.
+- **Caller responsibility:** Synthetic Data owns parent-plan lineage, row
+  canonicalization, clean-form-boundary policy, observed-snapshot fingerprints,
+  missing-payload selection, continuation preview and confirmation, and final
+  full-parent reconciliation. It must create a new immutable continuation plan
+  and authorization; it cannot reuse or resume the stopped authorization or an
+  attempted child plan.
+- **Rationale:** A manually reviewed recovery plan containing only rows proven
+  absent is not an automatic retry and does not change the immutable parent
+  intent. It provides a non-destructive recovery path while retaining duplicate
+  prevention and human control.
+- **Safeguards:** DIAG-008 remains the default for ordinary refreshes. Count-only
+  agreement, an inferred latest run, unexpected or ambiguous rows, a partial
+  form, changed local artifacts, changed live snapshot, unknown environment, or
+  non-interactive execution all fail closed. Continuation remains sandbox-only,
+  preview-first, bounded, newly confirmed, and stopped on every partial or
+  unknown result.
+- **Relevant aims:** C3, C5, C7, C8, E6, F3, F6.
+- **Revisit when:** AMS provides server-side idempotency keys, an authoritative
+  operation-status endpoint, or response semantics that can prove row-level
+  import completion without read-back comparison.
+
+### DIAG-011: Typed read-back normalization remains caller policy
+
+- **Date:** 2026-08-11
+- **Status:** Accepted; clarifies DIAG-010 without changing connector behavior
+- **Decision:** The connector preserves generic event metadata and returned form
+  pair values. It does not infer that an imported string and an AMS read-back
+  value are equivalent. Synthetic Data may apply a versioned, immutable-plan-
+  bound comparison policy for its own generated forms when read-only evidence
+  proves a transformation is meaning-preserving.
+- **Caller responsibility:** Synthetic Data explicitly allowlists fields and
+  accepts only exact finite-decimal equivalence, strict duration-to-integral-
+  millisecond equivalence, reviewed singleton-list wrapping, omitted blank
+  pairs, and redundant `Date`/`Time` omission after proving equality with event
+  start metadata. It reports only redacted field/category/count diagnostics.
+- **Rejected equivalences:** Numeric rounding or tolerance, AM/PM changes,
+  boolean or case synonyms, missing nonblank values, and generic list decoding
+  remain conflicts. In particular, a cross-midnight finish time read back 12
+  hours later is a semantic difference rather than formatting.
+- **Rationale:** Form type, precision, and source semantics belong to the
+  calling workflow. Keeping the connector lossless prevents one caller's
+  organization-specific schema assumptions from changing generic responses.
+- **Safeguards:** Policy version and hash are frozen into continuation plans;
+  changed policies require a fresh preview; unknown encodings fail closed; raw
+  fetched values are neither logged nor persisted by default; connector
+  flattening and payload construction remain unchanged.
+- **Relevant aims:** C3, C5, C7, C8, E6, F3, F6.
+- **Revisit when:** AMS exposes authoritative form field types and precision or
+  a typed response contract that is generic across tenants.
+
 ## Agent Decision Checklist
 
 Before adding or moving a diagnostic, an agent must answer:
