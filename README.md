@@ -261,6 +261,40 @@ The package exposes the same initializer API through editable and wheel
 installs, and the console command uses paths relative to the caller's current
 working directory.
 
+## Safety Modes
+
+Every write method accepts an optional `mode` (`ams_smartabase.SafetyMode` or
+the strings `"default"`, `"human"`, `"auto"`; unrecognized values fail
+closed). Full behavior and rationale: `specs/001-api-safety-modes/spec.md`.
+
+- **`default`** (the default when `mode` is omitted): unchanged behavior —
+  the existing `dry_run`/`confirm` booleans.
+- **`human`**: create-only writes (`insert_event` only) get a single
+  yes/no decision instead of the full confirmation flow, but only when this
+  process is attached to a real interactive terminal. A script, CI job, or
+  coding agent cannot satisfy this — there is no way to supply that decision
+  programmatically. A destination collision (an existing record for the same
+  identity) is checked before the prompt and always refuses the write.
+- **`auto`**: create-only writes with no prompt at all, gated behind an
+  `AutoQualification` (see `ams_smartabase.modes`) that a human must grant
+  interactively in advance, bound to a specific runner identity via the
+  `AMS_AUTO_RUNNER_ID` environment variable. `update_event`, `upsert_event`,
+  `upsert_profile`, and `delete_event` reject `human`/`auto` outright,
+  regardless of scope — those operations always use the full `default` path.
+
+```python
+result = client.insert_event(
+    [{"user_id": 150176, "start_date": "07/08/2026", "AC Short": 0.98}],
+    form="HRV AC Ratios",
+    mode="human",  # prompts once, live, in your own terminal — never from a script
+)
+```
+
+None of these modes validate the *meaning* of the data being written (for
+example, whether a submitted value is a plausible reading for its field).
+That is deliberately out of scope for the connector — see AGENTS.md — and
+remains the calling workflow's responsibility.
+
 ## Example Workflows
 
 Run the example event replay workflow in dry-run mode. This writes a preflight diff artifact before any delete or insert step:
