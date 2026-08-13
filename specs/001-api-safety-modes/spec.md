@@ -4,7 +4,12 @@
 
 **Created**: 2026-07-29
 
-**Status**: Draft — governance review required before planning
+**Status**: Implemented for `--default` and `--human` (constitution.md
+Principle IV and RISK_MODEL.md Category C amended in the same change —
+see "Current governance conflicts" below). `--auto`'s create-only mechanics
+are implemented; its runner-identity qualification binding is a first
+proposal, not a settled decision — flagged explicitly for maintainer
+(`@Rens88`) review before relying on it.
 
 **Input**: User description: "Define `--default`, `--human`, and `--auto` safety modes so cautious exploration retains all current guardrails, reviewed interactive workflows require less repetitive approval, and thoroughly reviewed automation can run unattended while preserving a strict Form A to separate Form B, no-replacement workflow."
 
@@ -228,24 +233,43 @@ incorrect mode classification or bypass could expose Critical behavior.
 - An unattended workflow is used to update, replace, or delete data.
 - Review or audit evidence exposes secrets or sensitive athlete data.
 
-**Current governance conflicts**:
+**Governance conflicts and how this change resolves them**:
 
-1. Constitution Principle IV and the operational constraints require explicit
-   confirmation before every live mutation. `--auto` live creation without a
-   per-run human decision therefore requires a prior governance amendment.
-2. Aim `D7` and the Risk Model require operation-specific typed confirmation
-   and reject generic yes/no approval for Critical operations. The requested
-   simplification cannot apply to those operations under current governance.
-3. The Risk Model forbids scheduled modification or deletion. This
-   specification preserves that prohibition permanently for `--auto`.
+1. Constitution Principle IV and RISK_MODEL.md Category C required an
+   operation-specific typed phrase for every live mutation. **Resolved** by
+   this change: both documents now carry an explicit HUMAN-mode exception,
+   scoped to create-only writes to a distinct, non-colliding destination,
+   conditioned on a runtime-verified interactive terminal session. Update,
+   upsert, replace, overwrite, archive, and delete are explicitly excluded
+   from the exception in both amended documents — no simplification applies
+   to those operations in any mode, matching `FR-030`.
+2. Aim `D7` and the Risk Model's rejection of generic yes/no approval for
+   Critical operations is unaffected: HUMAN mode never applies to Critical
+   (modify/delete) operations, so that requirement is not weakened, only
+   scoped more precisely to the operations it was always meant to cover.
+3. The Risk Model forbids scheduled modification or deletion. This remains
+   fully in force: `AUTO` mode refuses every modify/delete operation
+   unconditionally (`require_operation_allowed` in `ams_smartabase.modes`),
+   with no qualification able to override it.
+4. **Not yet resolved, deliberately**: how `AUTO` technically distinguishes a
+   human-operated automation platform from a coding agent invoking the
+   `AUTO` entry point directly. This implementation binds a qualification to
+   a runner-identity environment variable (`AMS_AUTO_RUNNER_ID`) that an
+   interactive session would not have set — see `ams_smartabase.modes`. This
+   is a proposal, not a maintainer-approved mechanism; `@Rens88`, please
+   confirm, reject, or propose an alternative before treating `AUTO` as
+   trustworthy against that specific threat.
 
-This specification records the proposed direction but does not amend those
-governance documents and does not authorize implementation.
+This change amends constitution.md and RISK_MODEL.md as described above and
+implements `--default` and `--human` in `ams_smartabase.modes` and
+`SmartabaseClient`. It does not, on its own, authorize treating `--auto` as
+production-ready — that depends on the runner-identity question above being
+resolved by the maintainer.
 
 ### Constitution Impact
 
-- **Runtime boundary**: No runtime change is made in this descriptive phase. Any later implementation remains Python-only.
-- **AMS/Smartabase API use**: Future behavior would continue to use direct, explicit AMS API operations; no API request is made by this specification.
+- **Runtime boundary**: Implemented, Python-only (`src/ams_smartabase/modes.py`).
+- **AMS/Smartabase API use**: `--human`/`--auto` create-only paths use the existing `insert_event`/`get_event` direct API calls; no new endpoints.
 - **Mutation safety**: Material impact. The proposal would reduce per-run confirmation for some live creates and therefore conflicts with current Principle IV until amended. Dry-run-first behavior, immutable preview, source preservation, environment checks, and the Critical-operation restrictions remain mandatory.
 - **Auditability**: Future elevated-mode runs require redacted qualification, plan, execution, and partial-failure evidence.
 - **Public interfaces**: The proposal adds the stable mode names `--default`, `--human`, and `--auto`, with equivalent semantics at supported initiating workflow surfaces.

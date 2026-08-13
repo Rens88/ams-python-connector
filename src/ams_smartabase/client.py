@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -17,6 +18,14 @@ from .filters import (
     build_profile_export_request,
     build_sync_request,
     build_user_request,
+)
+from .modes import (
+    SafetyMode,
+    check_auto_eligibility,
+    check_destination_non_collision,
+    require_interactive_confirmation,
+    require_operation_allowed,
+    resolve_mode,
 )
 from .payloads import (
     PayloadPackage,
@@ -173,7 +182,20 @@ class SmartabaseClient:
         resolve_user_ids: bool = False,
         dry_run: bool = True,
         confirm: bool = False,
+        mode: "SafetyMode | str | None" = None,
     ) -> OperationExecution:
+        """Insert new events. `mode` selects the safety-mode confirmation path.
+
+        DEFAULT (the default when `mode` is omitted) is exactly the original
+        dry_run/confirm boolean behavior — unchanged for backward
+        compatibility. HUMAN and AUTO are additive, opt-in, create-only paths
+        described in specs/001-api-safety-modes/spec.md; both still build the
+        same payload and both still refuse a live write on any missing
+        safeguard rather than silently falling back to DEFAULT.
+        """
+
+        resolved_mode = resolve_mode(mode)
+        require_operation_allowed(resolved_mode, "insert_event")
         prepared_records = self._prepare_write_records(records, resolve_user_ids=resolve_user_ids)
         package = build_event_import_payloads(
             prepared_records,
@@ -182,7 +204,56 @@ class SmartabaseClient:
             entered_by_user_id=entered_by_user_id,
             nested_table_identifiers=nested_table_identifiers,
         )
-        return self._execute_payload_package(package, dry_run=dry_run, confirm=confirm)
+
+        if resolved_mode is SafetyMode.DEFAULT:
+            return self._execute_payload_package(package, dry_run=dry_run, confirm=confirm)
+        return self._execute_create_only_with_mode(package, form=form, mode=resolved_mode)
+
+    def _execute_create_only_with_mode(
+        self,
+        package: PayloadPackage,
+        *,
+        form: str | None,
+        mode: SafetyMode,
+    ) -> OperationExecution:
+        """Shared HUMAN/AUTO path: preview, collision check, then mode-specific gate."""
+
+        preview = OperationExecution(
+            endpoint=package.endpoint,
+            attempted_count=package.attempted_count,
+            dry_run=True,
+            executed=False,
+            body=package.body,
+            row_operations=package.row_operations,
+            responses=[],
+        )
+        events = package.body.get("events", []) if isinstance(package.body, dict) else []
+        for event in events:
+            user_id = event.get("userId", {}).get("userId") if isinstance(event.get("userId"), dict) else None
+            check_destination_non_collision(
+                self,
+                form=form or str(event.get("formName", "")),
+                user_id=int(user_id),
+                start_date=str(event.get("startDate")),
+            )
+
+        if mode is SafetyMode.HUMAN:
+            print(json.dumps(package.body, indent=2, default=str))
+            if not require_interactive_confirmation(
+                f"HUMAN mode: submit {package.attempted_count} row(s) to "
+                f"{form!r}? Type 'yes' to continue: "
+            ):
+                return preview
+        elif mode is SafetyMode.AUTO:
+            check_auto_eligibility(
+                environment_url=self.credentials.url,
+                destination_form=form or "",
+                operation="insert_event",
+                batch_count=package.attempted_count,
+            )
+
+        self._ensure_live_mutation_allowed()
+        return self._execute_payload_package(package, dry_run=False, confirm=True)
 
     def update_event(
         self,
@@ -194,7 +265,9 @@ class SmartabaseClient:
         resolve_user_ids: bool = False,
         dry_run: bool = True,
         confirm: bool = False,
+        mode: "SafetyMode | str | None" = None,
     ) -> OperationExecution:
+        require_operation_allowed(resolve_mode(mode), "update_event")
         prepared_records = self._prepare_write_records(records, resolve_user_ids=resolve_user_ids)
         package = build_event_import_payloads(
             prepared_records,
@@ -215,7 +288,9 @@ class SmartabaseClient:
         resolve_user_ids: bool = False,
         dry_run: bool = True,
         confirm: bool = False,
+        mode: "SafetyMode | str | None" = None,
     ) -> OperationExecution:
+        require_operation_allowed(resolve_mode(mode), "upsert_event")
         prepared_records = self._prepare_write_records(records, resolve_user_ids=resolve_user_ids)
         package = build_event_import_payloads(
             prepared_records,
@@ -235,7 +310,9 @@ class SmartabaseClient:
         resolve_user_ids: bool = False,
         dry_run: bool = True,
         confirm: bool = False,
+        mode: "SafetyMode | str | None" = None,
     ) -> OperationExecution:
+        require_operation_allowed(resolve_mode(mode), "upsert_profile")
         prepared_records = self._prepare_write_records(records, resolve_user_ids=resolve_user_ids)
         package = build_profile_upsert_payloads(
             prepared_records,
@@ -250,7 +327,9 @@ class SmartabaseClient:
         *,
         dry_run: bool = True,
         confirm: bool = False,
+        mode: "SafetyMode | str | None" = None,
     ) -> OperationExecution:
+        require_operation_allowed(resolve_mode(mode), "delete_event")
         package = build_delete_payloads(event_ids)
         return self._execute_payload_package(package, dry_run=dry_run, confirm=confirm)
 

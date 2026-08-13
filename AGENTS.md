@@ -131,6 +131,27 @@ Critical operations require typed, operation-specific human confirmation. A
 fresh confirmation is required whenever the planned scope changes. Production
 deletion is out of scope unless repository governance explicitly permits it.
 
+### AUTO-Mode Qualifications
+
+The tiered safety modes feature (`specs/001-api-safety-modes/spec.md`, issue
+#5) lets a workflow run unattended under AUTO mode, but only while holding a
+human-granted qualification. An agent MAY help assemble a qualification's
+fields — reading form names, computing scope, drafting reviewer notes — but
+only under active human supervision, meaning a human is present and reviewing
+each field as it is proposed, not merely present in an earlier part of the
+conversation. An agent MUST NOT:
+
+- call `write_qualification_interactively` (or equivalent) expecting to
+  complete it itself — the function refuses without a real interactive
+  terminal session for exactly this reason;
+- invoke AUTO-mode execution itself, under any qualification, for any reason;
+- treat a qualification it drafted as self-authorizing once a human has
+  glanced at it — the human must complete the interactive grant step
+  themselves.
+
+This mirrors the existing rule against agent-supplied confirmation phrases:
+assistance in preparing a decision is not the same as making it.
+
 Agents must distinguish the generic connector from the calling workflow. Do
 not add organization-specific destination-form conventions to the connector.
 Interactive workflows own the required preview and human confirmation.
