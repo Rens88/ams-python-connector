@@ -5,7 +5,7 @@ This file is the current milestone and handoff note for coding agents. It should
 ## 001 Daily Data Pipeline (Implemented 2026-08-12)
 
 The sibling `ams-sandbox-data-synthesis` repository now contains the stateful,
-append-only daily pipeline described by `specs/001-daily-data-pipeline`.
+append-only daily pipeline described by `specs/002-daily-data-pipeline`.
 Applicable connector aims are B2, B4, B6-B8, C1-C3, C5-C8, E1, E4, E6-E9,
 F3, F5, F7, and F8; the highest risk remains **High** because a separate local
 interactive command can insert sandbox events.

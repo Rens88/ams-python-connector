@@ -1,6 +1,6 @@
 # Tasks: Incremental Synthetic Data Pipeline
 
-**Input**: Design documents under `specs/001-daily-data-pipeline/`
+**Input**: Design documents under `specs/002-daily-data-pipeline/`
 **Implementation repository**: `../ams-sandbox-data-synthesis`
 
 ## Phase 1: Setup

@@ -1,9 +1,9 @@
 # Implementation Plan: Incremental Synthetic Data Pipeline
 
-**Feature Branch**: `001-daily-data-pipeline` | **Current Git Branch**:
+**Feature Branch**: `002-daily-data-pipeline` | **Current Git Branch**:
 `agent/native-event-parsing` | **Date**: 2026-08-11 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/001-daily-data-pipeline/spec.md`
+**Input**: Feature specification from `specs/002-daily-data-pipeline/spec.md`
 
 ## Summary
 
@@ -156,7 +156,7 @@ outside this plan.
 ### Documentation (this feature)
 
 ```text
-specs/001-daily-data-pipeline/
+specs/002-daily-data-pipeline/
 ├── plan.md
 ├── research.md
 ├── data-model.md

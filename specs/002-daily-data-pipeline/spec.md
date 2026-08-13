@@ -1,6 +1,6 @@
 # Feature Specification: Incremental Synthetic Data Pipeline
 
-**Feature Branch**: `001-daily-data-pipeline` (Spec Kit feature identifier;
+**Feature Branch**: `002-daily-data-pipeline` (Spec Kit feature identifier;
 the existing worktree remains on `agent/native-event-parsing`)
 
 **Created**: 2026-08-11
