@@ -107,6 +107,53 @@ class RosterTests(unittest.TestCase):
         self.assertIs(roster[0].raw["groupsAndRoles"], first_user["groupsAndRoles"])
         self.assertNotIn("search", roster[0].raw)
 
+    def test_flatten_roster_response_extracts_groups_inside_groups_and_roles(self):
+        payload = [
+            {
+                "userId": 123,
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "groupsAndRoles": {
+                    "group": [{"id": 7, "name": "First Team"}],
+                    "role": [{"id": 8, "name": "Coach"}],
+                },
+            }
+        ]
+
+        roster = flatten_roster_response(payload)
+
+        self.assertEqual(roster[0].group_names, ["First Team"])
+
+    def test_flatten_roster_response_extracts_athlete_groups_inside_groups_and_roles(self):
+        payload = [
+            {
+                "userId": 150164,
+                "groupsAndRoles": {
+                    "athleteGroups": [{"id": 20797, "name": "SSC.KNLTB.G5"}],
+                    "role": [{"id": 1272, "name": "Athlete"}],
+                },
+            }
+        ]
+
+        roster = flatten_roster_response(payload)
+
+        self.assertEqual(roster[0].group_names, ["SSC.KNLTB.G5"])
+
+    def test_flatten_roster_response_extracts_group_membership_lists_without_roles(self):
+        payload = [
+            {
+                "userId": 123,
+                "groupsAndRoles": [
+                    {"type": "group", "name": "First Team"},
+                    {"type": "role", "name": "Coach"},
+                ],
+            }
+        ]
+
+        roster = flatten_roster_response(payload)
+
+        self.assertEqual(roster[0].group_names, ["First Team"])
+
     def test_flatten_roster_response_accepts_empty_official_user_result_batch(self):
         payload = {
             "results": [
