@@ -142,6 +142,64 @@ class DiagnosticTests(unittest.TestCase):
                     )
                 )
 
+    def test_delete_message_confirms_only_the_exact_requested_event_id(self):
+        execution = OperationExecution(
+            endpoint="deleteevent",
+            attempted_count=1,
+            dry_run=False,
+            executed=True,
+            body=[{"eventId": 123}],
+            row_operations=[],
+            responses=[{"message": "Deleted 123"}],
+        )
+
+        assessment = assess_operation_execution(
+            execution,
+            expected_count=1,
+            operation="delete_event",
+            expected_event_id=123,
+        )
+
+        self.assertEqual(assessment.state, MutationState.CONFIRMED_COMPLETE)
+        self.assertTrue(assessment.confirmed)
+        self.assertEqual(assessment.event_ids, (123,))
+
+        mismatch = assess_operation_execution(
+            execution,
+            expected_count=1,
+            operation="delete_event",
+            expected_event_id=999,
+        )
+        self.assertEqual(mismatch.state, MutationState.PARTIAL_OR_UNKNOWN)
+        self.assertFalse(mismatch.confirmed)
+        self.assertEqual(mismatch.reason_code, "delete_event_id_mismatch")
+
+    def test_delete_message_parser_rejects_ambiguous_or_error_responses(self):
+        for response in (
+            {"message": "Deletion queued 123"},
+            {"message": "Deleted 123 extra"},
+            {"message": "Deleted 0"},
+            {"message": "Deleted 123", "error": "permission denied"},
+        ):
+            with self.subTest(response=response):
+                execution = OperationExecution(
+                    endpoint="deleteevent",
+                    attempted_count=1,
+                    dry_run=False,
+                    executed=True,
+                    body=[{"eventId": 123}],
+                    row_operations=[],
+                    responses=[response],
+                )
+                assessment = assess_operation_execution(
+                    execution,
+                    expected_count=1,
+                    operation="delete_event",
+                    expected_event_id=123,
+                )
+                self.assertEqual(assessment.state, MutationState.PARTIAL_OR_UNKNOWN)
+                self.assertFalse(assessment.confirmed)
+
     def test_insert_response_with_plain_ids_list_is_confirmed_complete(self):
         # Reproduces a real Smartabase eventsimport success response observed
         # against a sandbox tenant: the new event ID comes back as a plain
@@ -180,7 +238,7 @@ class DiagnosticTests(unittest.TestCase):
         self.assertTrue(assessment.confirmed)
         self.assertEqual(assessment.event_ids, (34368286,))
 
-    def test_delete_response_with_plain_success_state_is_recognized(self):
+    def test_delete_response_with_plain_success_state_and_exact_message_is_confirmed(self):
         # Reproduces a real Smartabase deleteevent success response: no
         # structured event-ID field at all, only free text plus a bare
         # "state": "SUCCESS". The connector deliberately does not parse the
@@ -208,9 +266,10 @@ class DiagnosticTests(unittest.TestCase):
             expected_event_id=34368029,
         )
 
-        self.assertEqual(assessment.state, MutationState.PARTIAL_OR_UNKNOWN)
-        self.assertEqual(assessment.reason_code, "delete_event_id_mismatch")
-        self.assertNotEqual(assessment.reason_code, "unrecognized_or_error_response")
+        self.assertEqual(assessment.state, MutationState.CONFIRMED_COMPLETE)
+        self.assertTrue(assessment.confirmed)
+        self.assertEqual(assessment.event_ids, (34368029,))
+        self.assertEqual(assessment.reason_code, "confirmed_complete")
 
     def test_acceptance_parser_rejects_error_envelopes(self):
         self.assertEqual(

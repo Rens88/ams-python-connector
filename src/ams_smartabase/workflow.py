@@ -25,7 +25,12 @@ from .payloads import coerce_records_input
 
 DEFAULT_EXAMPLE_CONFIG = Path("use_case_examples/synthetic_data/config.json")
 DEFAULT_EXAMPLE_CSV = Path("use_case_examples/synthetic_data/csv/training load template 1777445863459.csv")
-EVENT_ID_KEYS = EXACT_EVENT_ID_KEYS
+# Smartabase event-export responses use the generic field name `id` for the
+# event's stable ID. Accept it only while parsing known event records here.
+# Keep the shared diagnostics keys stricter: diagnostics inspects several
+# response types, where an unqualified `id` may identify something other than
+# an event and must never accidentally become a deletion target.
+EVENT_ID_KEYS = EXACT_EVENT_ID_KEYS + ("id",)
 _TIME_COLUMN = "Time"
 _DATE_COLUMN = "Date"
 _NAME_COLUMNS = ("First Name", "Last Name")

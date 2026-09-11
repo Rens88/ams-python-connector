@@ -430,7 +430,7 @@ def _normalize_roster_entry(item: Mapping[str, Any]) -> RosterEntry:
     )
     username = _first_text(item, *_BASE_FIELD_ALIASES["username"])
     email = _first_text(item, *_BASE_FIELD_ALIASES["email"])
-    group_names = _coerce_group_names(_first_present(item, "group_names", "groupNames", "groups", "group"))
+    group_names = _user_group_names(item)
     return RosterEntry(
         user_id=user_id,
         about=about,
@@ -441,6 +441,69 @@ def _normalize_roster_entry(item: Mapping[str, Any]) -> RosterEntry:
         group_names=group_names,
         raw=dict(item),
     )
+
+
+def _user_group_names(item: Mapping[str, Any]) -> list[str]:
+    """Extract group memberships without treating role names as groups."""
+
+    names = _coerce_group_names(
+        _first_present(item, "group_names", "groupNames", "group_name", "groupName", "groups", "group")
+    )
+    groups_and_roles = _first_present(item, "groupsAndRoles", "groups_and_roles")
+    names.extend(_groups_from_groups_and_roles(groups_and_roles))
+
+    unique_names: list[str] = []
+    seen: set[str] = set()
+    for name in names:
+        normalized = name.casefold()
+        if normalized not in seen:
+            seen.add(normalized)
+            unique_names.append(name)
+    return unique_names
+
+
+def _groups_from_groups_and_roles(value: object) -> list[str]:
+    """Read only group branches from the tenant-specific membership shape."""
+
+    if isinstance(value, Mapping):
+        nested_groups = _first_present(
+            value,
+            "group_names",
+            "groupNames",
+            "group_name",
+            "groupName",
+            "groups",
+            "group",
+            "athlete_groups",
+            "athleteGroups",
+        )
+        return _coerce_group_names(nested_groups)
+    if isinstance(value, list):
+        names: list[str] = []
+        for item in value:
+            if not isinstance(item, Mapping):
+                continue
+            nested_groups = _first_present(
+                item,
+                "group_names",
+                "groupNames",
+                "group_name",
+                "groupName",
+                "groups",
+                "group",
+                "athlete_groups",
+                "athleteGroups",
+            )
+            if nested_groups is not None:
+                names.extend(_coerce_group_names(nested_groups))
+                continue
+            item_type = str(_first_present(item, "type", "kind", "category") or "").casefold()
+            if item_type == "group":
+                names.extend(
+                    _coerce_group_names(_first_present(item, "name", "label", "value"))
+                )
+        return names
+    return []
 
 
 def _first_present(item: Mapping[str, Any], *keys: str) -> Any | None:
@@ -597,7 +660,24 @@ def _coerce_group_names(value: object) -> list[str]:
     if isinstance(value, str):
         return [value]
     if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
+        names: list[str] = []
+        for item in value:
+            names.extend(_coerce_group_names(item))
+        return names
+    if isinstance(value, Mapping):
+        direct_name = _first_present(value, *_GROUP_NAME_KEYS)
+        if direct_name is not None:
+            return _coerce_group_names(direct_name)
+        nested_groups = _first_present(
+            value,
+            "group_names",
+            "groupNames",
+            "groups",
+            "group",
+        )
+        if nested_groups is not None:
+            return _coerce_group_names(nested_groups)
+        return []
     return [str(value).strip()]
 
 

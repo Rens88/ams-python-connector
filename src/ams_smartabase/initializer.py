@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from getpass import getpass
 import hashlib
@@ -35,7 +35,9 @@ from .filters import USER_KEYS
 from .diagnostics import discover_endpoint_provenance
 from .roster import (
     fetch_roster,
+    flatten_roster_response,
     normalize_group_response,
+    RosterEntry,
     roster_to_rows,
 )
 
@@ -78,6 +80,7 @@ def initialize_sandbox_athletes(
     user_key: str | None = None,
     user_value: object | None = None,
     include_all_cols: bool = False,
+    include_group: bool = False,
     list_groups: bool = False,
     groups_csv: str | Path | None = None,
     discover_endpoints: bool = True,
@@ -116,6 +119,7 @@ def initialize_sandbox_athletes(
             client,
             required_aliases=_required_endpoint_aliases(
                 resolved_key,
+                include_group=include_group,
                 list_groups=list_groups,
             ),
         ).source
@@ -142,10 +146,26 @@ def initialize_sandbox_athletes(
         user_key=resolved_key if resolved_key not in {"group", "current_group"} else None,
         user_value=resolved_value if resolved_key not in {"group", "current_group"} else None,
     )
+    if include_group:
+        roster = _enrich_roster_groups(client, roster)
     columns, athlete_rows = roster_to_rows(
         roster,
         include_all_cols=include_all_cols,
     )
+    if include_group:
+        for entry, row in zip(roster, athlete_rows):
+            row["Group"] = " | ".join(entry.group_names)
+        existing_group_columns = [
+            column for column in columns if column.casefold() == "group"
+        ]
+        if existing_group_columns:
+            existing_group = existing_group_columns[0]
+            if existing_group != "Group":
+                columns[columns.index(existing_group)] = "Group"
+                for row in athlete_rows:
+                    row.pop(existing_group, None)
+        else:
+            columns.append("Group")
     if not athlete_rows and resolved_key == "username":
         raise ValueError(
             "Smartabase returned no athlete rows for the username selector. "
@@ -175,6 +195,7 @@ def initialize_sandbox_athletes(
         "columns": columns,
         "selector": selector_data,
         "include_all_cols": bool(include_all_cols),
+        "include_group": bool(include_group),
         "endpoint_discovery": endpoint_status,
     }
     if group_rows is not None:
@@ -244,6 +265,12 @@ def build_parser() -> argparse.ArgumentParser:
             "These can contain additional personal data."
         ),
     )
+    parser.add_argument(
+        "--include-group",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Include live athlete group membership in the registry as Group.",
+    )
     parser.add_argument("--list-groups", action="store_true")
     parser.add_argument(
         "--groups-csv",
@@ -291,6 +318,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_csv=args.output_csv,
             output_json=args.output_json,
             include_all_cols=include_all_cols,
+            include_group=args.include_group,
             list_groups=args.list_groups,
             groups_csv=args.groups_csv,
             discover_endpoints=args.discover_endpoints,
@@ -673,9 +701,50 @@ def _selector_value_is_missing(value: object | None) -> bool:
     return False
 
 
+def _enrich_roster_groups(
+    client: SmartabaseClient,
+    roster: Sequence[RosterEntry],
+) -> list[RosterEntry]:
+    """Fetch per-user group membership when the initial roster omits it.
+
+    Group metadata is optional for a valid user roster. Missing memberships
+    therefore remain empty, while transport and response-shape failures still
+    propagate to the caller before any local file is replaced.
+    """
+
+    user_ids = sorted(
+        {entry.user_id for entry in roster if entry.user_id is not None}
+    )
+    if not user_ids:
+        return list(roster)
+
+    detailed_roster = flatten_roster_response(
+        client.get_user(user_key="user_id", user_value=user_ids)
+    )
+    groups_by_user: dict[int, tuple[str, ...]] = {}
+    for entry in detailed_roster:
+        if entry.user_id is None:
+            continue
+        groups = tuple(entry.group_names)
+        previous = groups_by_user.get(entry.user_id)
+        if previous is not None and previous != groups:
+            raise ValueError(
+                "Live roster returned conflicting group memberships for "
+                f"user_id {entry.user_id}."
+            )
+        groups_by_user[entry.user_id] = groups
+
+    enriched: list[RosterEntry] = []
+    for entry in roster:
+        groups = groups_by_user.get(entry.user_id or -1) or tuple(entry.group_names)
+        enriched.append(replace(entry, group_names=list(groups)))
+    return enriched
+
+
 def _required_endpoint_aliases(
     resolved_key: str | None,
     *,
+    include_group: bool,
     list_groups: bool,
 ) -> set[str]:
     selector_endpoint = {
@@ -683,6 +752,8 @@ def _required_endpoint_aliases(
         "current_group": "currentgroup",
     }.get(resolved_key, "usersearch")
     required = {selector_endpoint}
+    if include_group:
+        required.add("usersearch")
     if list_groups:
         required.add("listgroups")
     return required

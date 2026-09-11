@@ -2,6 +2,46 @@
 
 This file is the current milestone and handoff note for coding agents. It should stay short and should not duplicate the long-term roadmap in [../docs/roadmap.md](../docs/roadmap.md).
 
+## 001 Daily Data Pipeline (Implemented 2026-08-12)
+
+The sibling `ams-sandbox-data-synthesis` repository now contains the stateful,
+append-only daily pipeline described by `specs/002-daily-data-pipeline`.
+Applicable connector aims are B2, B4, B6-B8, C1-C3, C5-C8, E1, E4, E6-E9,
+F3, F5, F7, and F8; the highest risk remains **High** because a separate local
+interactive command can insert sandbox events.
+
+Implemented boundaries:
+
+- deterministic date transitions with immutable hash-linked checkpoints,
+  missing-date catch-up, stable IDs, weekly context, pending events, and
+  effective-dated roster cutovers;
+- one local CLI for WSV, KNLTB, or both, including read-only remote
+  classification, immutable daily/master upload plans, status, and reporting;
+- a protected-Volume/Delta Databricks adapter and a paused serverless
+  prepare-only job; scheduled publication is deliberately absent; and
+- interactive event-only publication with a fresh complete scope read, exact
+  target/plan/hash checks, a real-TTY typed phrase, single-use authorization,
+  no mutation retry, and exact read-only reconciliation.
+
+Verification evidence:
+
+- 47 daily-focused synthesis tests pass after final safety changes;
+- the complete connector suite passes 147 tests with 1 opt-in live test skipped;
+- the synthesis wheel and connector wheel build, the synthesis wheel contains
+  all required root modules/package files and no state or credential files, and
+  an external wheel-path import smoke test passes;
+- CLI help, form-map JSON, Databricks YAML structural safeguards, Python
+  compilation, task format/completion, and scoped `git diff --check` pass; and
+- the full sibling synthesis suite runs 188 tests; 186 pass and two pre-existing
+  refresh tests error because current ignored template/form-map fixtures do not
+  match their assumptions. Neither failing test touches the new daily modules.
+
+No live AMS request, mutation, Databricks bundle validation, deployment, or
+schedule activation was performed. The first recommended next action is the
+README's local WSV-yesterday `init`/`prepare --remote-check skip` smoke test,
+followed by the read-only `--remote-check require` step under an authorized
+operator account.
+
 ## Current Milestone
 
 The next major workflow is a sandbox-safe synthetic-data pipeline:
@@ -168,6 +208,18 @@ expecting `pip install -r requirements.txt` to reproduce that dependency in CI
 or on an independent machine.
 
 ## Recent Session Summary
+
+2026-08-06:
+
+- Replaced the workflow tests' dependency on ignored local
+  `use_case_examples/synthetic_data` files with a committed, deterministic
+  fixture pair under `tests/fixtures/workflow`.
+- The fixture contains fictional test-only values and is passed explicitly to
+  `load_example_event_workflow_input()`; the ignored operational example
+  directory remains excluded from version control.
+- The 13 previously known missing-fixture failures are resolved. All 21
+  workflow tests pass, and the full connector suite passes 144 tests with the
+  opt-in live test skipped. No live AMS request or mutation was performed.
 
 2026-08-05:
 

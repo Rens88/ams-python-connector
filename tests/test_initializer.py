@@ -68,6 +68,7 @@ class StubInitializerClient:
         self,
         users,
         *,
+        user_lookup=None,
         groups=None,
         url="https://example.smartabase.test/sandbox",
         discovery_error=None,
@@ -77,6 +78,7 @@ class StubInitializerClient:
     ):
         self.credentials = SmartabaseCredentials(url, "example-user", "super-secret")
         self.users = users
+        self.user_lookup = user_lookup
         self.groups = [] if groups is None else groups
         self.discovery_error = discovery_error
         self.discovery_aliases = discovery_aliases
@@ -98,6 +100,8 @@ class StubInitializerClient:
 
     def get_user(self, *, user_key=None, user_value=None):
         self.calls.append(("get_user", user_key, user_value))
+        if user_key == "user_id" and self.user_lookup is not None:
+            return self.user_lookup
         return self.users
 
     def get_group(self):
@@ -220,6 +224,58 @@ class InitializerWorkflowTests(unittest.TestCase):
             [(row["first_name"], row["last_name"]) for row in rows],
             [("Ada", "Lovelace"), ("Grace", "Hopper")],
         )
+
+    def test_can_include_live_group_membership_in_registry(self):
+        client = StubInitializerClient(
+            [
+                user(7, "Ada", "Lovelace"),
+            ],
+            user_lookup=[
+                user(
+                    7,
+                    "Ada",
+                    "Lovelace",
+                    groupsAndRoles={
+                        "athleteGroups": [{"id": 20797, "name": "SSC.KNLTB.G5"}],
+                        "role": [{"id": 1272, "name": "Athlete"}],
+                    },
+                )
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_csv = Path(tmp) / "athletes.csv"
+            result = initialize_sandbox_athletes(
+                client,
+                output_csv=output_csv,
+                output_json=Path(tmp) / "metadata.json",
+                include_group=True,
+            )
+            columns, rows = read_csv(output_csv)
+
+        self.assertEqual(columns[-1], "Group")
+        self.assertEqual(rows[0]["Group"], "SSC.KNLTB.G5")
+        self.assertTrue(result.columns[-1] == "Group")
+
+    def test_group_membership_is_optional_during_registry_initialization(self):
+        client = StubInitializerClient(
+            [user(7, "Ada", "Lovelace")],
+            user_lookup=[user(7, "Ada", "Lovelace")],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_csv = Path(tmp) / "athletes.csv"
+            result = initialize_sandbox_athletes(
+                client,
+                output_csv=output_csv,
+                output_json=Path(tmp) / "metadata.json",
+                include_group=True,
+            )
+            columns, rows = read_csv(output_csv)
+
+        self.assertEqual(result.row_count, 1)
+        self.assertEqual(columns[-1], "Group")
+        self.assertEqual(rows[0]["Group"], "")
 
     def test_supports_current_group_identifier_and_all_user_selectors(self):
         cases = [
@@ -715,12 +771,14 @@ class InitializerCliTests(unittest.TestCase):
                 "Athletes",
                 "--include-all-cols",
                 "--list-groups",
+                "--include-group",
                 "--no-discover-endpoints",
             ]
         )
         self.assertEqual(args.env_file, Path("custom.env"))
         self.assertEqual(args.group_name, "Athletes")
         self.assertTrue(args.include_all_cols)
+        self.assertTrue(args.include_group)
         self.assertTrue(args.list_groups)
         self.assertFalse(args.discover_endpoints)
 

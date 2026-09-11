@@ -32,6 +32,7 @@ SUCCESS_COUNT_KEYS = (
     "deleted_count",
     "deletedCount",
 )
+DELETE_SUCCESS_MESSAGE_RE = re.compile(r"Deleted ([1-9]\d*)", re.IGNORECASE)
 
 
 class MutationState(str, Enum):
@@ -235,6 +236,14 @@ def assess_operation_execution(
     responses = list(getattr(execution, "responses", []))
     response_count = len(responses)
     event_ids = tuple(_extract_event_ids(responses))
+    if operation == "delete_event":
+        # AMS' delete endpoint can confirm the exact deleted ID only in a
+        # message such as ``{"message": "Deleted 123"}``. Keep this strict and
+        # delete-specific: interpreting arbitrary response text as an event ID
+        # would weaken exact-ID deletion validation.
+        event_ids = tuple(
+            sorted(set(event_ids).union(_extract_delete_success_event_ids(responses)))
+        )
     acceptance_states = tuple(
         state
         for response in responses
@@ -341,6 +350,10 @@ def response_confirms_success(response: object, expected_count: int, operation: 
         return (
             response.strip().casefold() in SUCCESS_STATUSES
             or smartabase_acceptance_state(response) is not None
+            or (
+                operation == "delete_event"
+                and _delete_success_event_id(response) is not None
+            )
         )
     if not isinstance(response, Mapping) or response.get("__is_rpc_exception__"):
         return False
@@ -353,6 +366,10 @@ def response_confirms_success(response: object, expected_count: int, operation: 
         status not in SUCCESS_STATUSES
         and response.get("success") is not True
         and smartabase_acceptance_state(response) is None
+        and not (
+            operation == "delete_event"
+            and _delete_success_event_id(response) is not None
+        )
     ):
         return False
     expected = 1 if operation in {"delete_event", "upsert_profile"} else expected_count
@@ -449,6 +466,36 @@ def _extract_event_ids(value: object) -> list[int]:
 
     visit(value)
     return sorted(found)
+
+
+def _extract_delete_success_event_ids(value: object) -> list[int]:
+    """Extract IDs only from the verified delete-endpoint success message."""
+
+    found: set[int] = set()
+
+    def visit(item: object) -> None:
+        event_id = _delete_success_event_id(item)
+        if event_id is not None:
+            found.add(event_id)
+        if isinstance(item, list):
+            for nested in item:
+                visit(nested)
+
+    visit(value)
+    return sorted(found)
+
+
+def _delete_success_event_id(response: object) -> int | None:
+    if isinstance(response, Mapping):
+        if response.get("__is_rpc_exception__") or _response_has_error(response):
+            return None
+        message = response.get("message")
+    else:
+        message = response
+    if not isinstance(message, str):
+        return None
+    match = DELETE_SUCCESS_MESSAGE_RE.fullmatch(message.strip())
+    return int(match.group(1)) if match is not None else None
 
 
 def _emit_endpoint_warning(message: str, enabled: bool, stacklevel: int) -> None:
